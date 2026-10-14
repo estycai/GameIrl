@@ -60,7 +60,12 @@ try {
   // tsc exits non-zero on the moduleResolution deprecation notice while still
   // emitting, so a throw here is only fatal if the output is missing.
   try {
-    compile('src/style/buildStyle.ts', 'src/camera/cameraModes.ts');
+    compile(
+      'src/style/buildStyle.ts',
+      'src/camera/cameraModes.ts',
+      'src/nav/routeProgress.ts',
+      'src/search/places.ts',
+    );
   } catch (error) {
     const text = String(error.stdout ?? '') + String(error.stderr ?? '');
     if (!/TS5107/.test(text)) throw error;
@@ -74,6 +79,10 @@ try {
     haversineDistanceMeters, CAMERA_MODES,
   } = require_(join(outDir, 'src', 'camera', 'cameraModes.js'));
   const { routeBounds } = require_(join(outDir, 'src', 'style', 'routeBounds.js'));
+  const { buildRouteGeometry, positionAtDistance } =
+    require_(join(outDir, 'src', 'nav', 'routeProgress.js'));
+  const { PLACES, searchPlaces } =
+    require_(join(outDir, 'src', 'search', 'places.js'));
 
   const route = JSON.parse(
     readFileSync(join(REPO_ROOT, 'data', 'route-demo.geojson'), 'utf8'),
@@ -200,6 +209,91 @@ try {
     preview.bounds !== undefined && preview.padding !== undefined);
   check('nav is pitch 60, zoom 17, bearing down the route',
     nav.pitch === 60 && nav.zoom === 17 && nav.bearing === bearing);
+
+  // --- route progress -----------------------------------------------------
+
+  console.log('\nbuildRouteGeometry');
+  const geom = buildRouteGeometry(route);
+  check('one cumulative entry per coordinate',
+    geom.cumulative.length === geom.coordinates.length,
+    `${geom.cumulative.length} vs ${geom.coordinates.length}`);
+  check('cumulative starts at zero', geom.cumulative[0] === 0);
+  check('cumulative is monotonically non-decreasing',
+    geom.cumulative.every((v, i) => i === 0 || v >= geom.cumulative[i - 1]));
+  check('totalMeters equals the last cumulative entry',
+    geom.totalMeters === geom.cumulative[geom.cumulative.length - 1]);
+  check('totalMeters is within 2% of the declared distance',
+    Math.abs(geom.totalMeters - line.properties.distance_m) /
+      line.properties.distance_m < 0.02,
+    `${Math.round(geom.totalMeters)} m vs ${line.properties.distance_m} m`);
+
+  console.log('\npositionAtDistance');
+  const atStart = positionAtDistance(geom, 0);
+  const atEnd = positionAtDistance(geom, geom.totalMeters);
+  const first = geom.coordinates[0];
+  const last = geom.coordinates[geom.coordinates.length - 1];
+  check('distance 0 is the first coordinate',
+    atStart.center[0] === first[0] && atStart.center[1] === first[1]);
+  check('the full distance is the last coordinate',
+    atEnd.center[0] === last[0] && atEnd.center[1] === last[1]);
+
+  const clampLow = positionAtDistance(geom, -5000);
+  const clampHigh = positionAtDistance(geom, geom.totalMeters * 10);
+  check('negative distance clamps to the start',
+    clampLow.center[0] === first[0] && clampLow.center[1] === first[1]);
+  check('overshooting clamps to the end',
+    clampHigh.center[0] === last[0] && clampHigh.center[1] === last[1]);
+
+  // Walking the route must move forward monotonically and stay on the map.
+  let previous = 0;
+  let monotonic = true;
+  let insideBbox = true;
+  let bearingsFinite = true;
+  for (let m = 0; m <= geom.totalMeters; m += geom.totalMeters / 60) {
+    const p = positionAtDistance(geom, m);
+    const travelled = haversineDistanceMeters(first, p.center);
+    if (travelled + 1e-6 < previous - 500) monotonic = false;
+    previous = travelled;
+    const [lng, lat] = p.center;
+    if (lng < w || lng > e || lat < s || lat > n) insideBbox = false;
+    if (!Number.isFinite(p.bearing) || p.bearing < 0 || p.bearing >= 360) {
+      bearingsFinite = false;
+    }
+  }
+  check('sampling the whole route never jumps backwards', monotonic);
+  check('every sampled position stays inside the route bbox', insideBbox);
+  check('every sampled bearing is finite and within [0, 360)', bearingsFinite);
+
+  // Interpolation must actually interpolate, not snap to vertices.
+  const mid = positionAtDistance(geom, geom.totalMeters / 2);
+  check('the midpoint is strictly between the endpoints',
+    (mid.center[0] !== first[0] || mid.center[1] !== first[1]) &&
+    (mid.center[0] !== last[0] || mid.center[1] !== last[1]));
+
+  // --- search -------------------------------------------------------------
+
+  console.log('\nsearchPlaces');
+  check('an empty query returns every fixture',
+    searchPlaces('').length === PLACES.length);
+  check('whitespace is treated as empty',
+    searchPlaces('   ').length === PLACES.length);
+  check('matching is case-insensitive',
+    searchPlaces('HOSPITAL').length === searchPlaces('hospital').length &&
+    searchPlaces('HOSPITAL').length > 0);
+  check('matching is accent-insensitive',
+    searchPlaces('Rivadávia').some((p) => p.id === 'route-destination'));
+  check('the detail line is searched too',
+    searchPlaces('terminal').some((p) => p.id === 'station'));
+  check('a query that matches nothing returns nothing',
+    searchPlaces('zzzzzzzz').length === 0);
+  check('fixture ids are unique',
+    new Set(PLACES.map((p) => p.id)).size === PLACES.length);
+  check('every fixture sits inside the route bbox',
+    PLACES.every(({ center: [lng, lat] }) =>
+      lng >= w && lng <= e && lat >= s && lat <= n));
+  check('the first fixture is the demo route\'s real destination',
+    PLACES[0].center[0] === dest.geometry.coordinates[0] &&
+    PLACES[0].center[1] === dest.geometry.coordinates[1]);
 
   console.log(`\nMerged styles written to ${outDir}`);
   console.log('Validate them with:');

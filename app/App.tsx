@@ -3,8 +3,6 @@ import {
   Platform,
   StatusBar as RNStatusBar,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -12,18 +10,29 @@ import { StatusBar } from "expo-status-bar";
 // JavaScript `Map` constructor used for the style cache below.
 import {
   Camera,
+  GeoJSONSource,
+  Layer,
   Map as MapLibreMap,
+  type CameraRef,
   type StyleSpecification,
 } from "@maplibre/maplibre-react-native";
 
 import routeDemoJson from "./assets/templates/route-demo.json";
+import { type AppPhase, cameraModeForPhase } from "./src/app/phases";
 import {
-  type CameraMode,
   getCameraStop,
+  getRouteOrigin,
 } from "./src/camera/cameraModes";
-import { CameraModeBar } from "./src/components/CameraModeBar";
-import { RouteCard } from "./src/components/RouteCard";
+import { ErrorBanner } from "./src/components/ErrorBanner";
+import { LocateButton } from "./src/components/LocateButton";
+import { NavBanner } from "./src/components/NavBanner";
+import { PreviewBanner } from "./src/components/PreviewBanner";
+import { SearchBox } from "./src/components/SearchBox";
 import { TemplateSwitcher } from "./src/components/TemplateSwitcher";
+import { buildRouteGeometry } from "./src/nav/routeProgress";
+import { useRouteSimulation } from "./src/nav/useRouteSimulation";
+import { vehicleCorePaint, vehicleHaloPaint } from "./src/nav/vehiclePaint";
+import { type Place, PLACES } from "./src/search/places";
 import {
   buildStyle,
   type TemplateKey,
@@ -31,18 +40,29 @@ import {
 import { getTheme } from "./src/theme/themes";
 
 const routeData = routeDemoJson as unknown as GeoJSON.FeatureCollection;
+const routeGeometry = buildRouteGeometry(routeData);
 
-// Calculate platform-safe insets without external native modules
+let routeDistanceMeters = 6884;
+let routeDurationSeconds = 662;
+for (const f of routeData.features) {
+  if (f.properties?.kind === "route") {
+    routeDistanceMeters = Number(f.properties.distance_m ?? 6884);
+    routeDurationSeconds = Number(f.properties.duration_s ?? 662);
+    break;
+  }
+}
+
 const TOP_INSET =
   Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 24) : 48;
 const BOTTOM_INSET = Platform.OS === "ios" ? 34 : 16;
 
 export default function App() {
+  const [phase, setPhase] = useState<AppPhase>("browse");
   const [templateKey, setTemplateKey] = useState<TemplateKey>("miami-6");
-  const [cameraMode, setCameraMode] = useState<CameraMode>("browse");
+  const [destination, setDestination] = useState<Place>(PLACES[0]);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  // Cache built styles so switching back to a template does not rebuild it
+  const cameraRef = useRef<CameraRef>(null);
   const styleCache = useRef<Map<TemplateKey, StyleSpecification>>(new Map());
 
   const currentStyle = useMemo(() => {
@@ -56,35 +76,57 @@ export default function App() {
 
   const theme = useMemo(() => getTheme(templateKey), [templateKey]);
 
-  const cameraStop = useMemo(
-    () => getCameraStop(cameraMode, routeData),
-    [cameraMode]
-  );
+  // Simulation runs only while in navigation phase
+  const isNavActive = phase === "nav";
+  const simulation = useRouteSimulation(routeGeometry, isNavActive, 6);
 
-  const handleMapFail = useCallback((event: any) => {
-    let detail = "Map failed to load";
-    if (event?.nativeEvent) {
-      if (typeof event.nativeEvent === "string") {
-        detail = event.nativeEvent;
-      } else if (event.nativeEvent.message) {
-        detail = String(event.nativeEvent.message);
-      } else {
-        try {
-          detail = JSON.stringify(event.nativeEvent);
-        } catch {
-          detail = String(event.nativeEvent);
-        }
-      }
+  // Viewport: dynamic simulation position in nav; static preset in browse/preview
+  const cameraStop = useMemo(() => {
+    if (phase === "nav") {
+      return {
+        center: simulation.position.center,
+        bearing: simulation.position.bearing,
+        pitch: 60, // Maximum supported pitch in MapLibre Native
+        zoom: 17,
+      };
     }
-    setMapError(detail);
+    return getCameraStop(cameraModeForPhase(phase), routeData);
+  }, [phase, simulation.position.center, simulation.position.bearing]);
+
+  const vehicleFeature = useMemo<GeoJSON.FeatureCollection>(() => ({
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Point",
+          coordinates: simulation.position.center,
+        },
+      },
+    ],
+  }), [simulation.position.center]);
+
+  const handleSelectPlace = useCallback((place: Place) => {
+    // NOTE: There is only one route fixture, so EVERY destination previews that
+    // same demo route. We do not fake a different polyline per place.
+    setDestination(place);
+    setPhase("preview");
   }, []);
 
-  const statusBarStyle =
-    templateKey === "miami-6" ? "light" : "dark";
+  const handleLocate = useCallback(() => {
+    const origin = getRouteOrigin(routeData);
+    cameraRef.current?.flyTo({ center: origin, zoom: 15, duration: 800 });
+  }, []);
+
+  const handleMapFail = useCallback((event: any) => {
+    const detail = event?.nativeEvent?.message ?? String(event?.nativeEvent ?? "Map failed to load");
+    setMapError(typeof detail === "object" ? JSON.stringify(detail) : String(detail));
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar style={statusBarStyle} />
+      <StatusBar style={templateKey === "miami-6" ? "light" : "dark"} />
 
       <MapLibreMap
         mapStyle={currentStyle}
@@ -93,10 +135,28 @@ export default function App() {
         compass
         onDidFailLoadingMap={handleMapFail}
       >
-        <Camera {...cameraStop} />
+        <Camera ref={cameraRef} {...cameraStop} />
+
+        {phase === "nav" && (
+          <GeoJSONSource id="nav-vehicle" data={vehicleFeature}>
+            {/* Paint comes from the template's own puck layers, so the moving
+                vehicle matches the stationary puck. See vehiclePaint.ts for
+                why theme tokens are the wrong source here. */}
+            <Layer
+              id="nav-vehicle-halo"
+              type="circle"
+              paint={vehicleHaloPaint(templateKey) as any}
+            />
+            <Layer
+              id="nav-vehicle-core"
+              type="circle"
+              paint={vehicleCorePaint(templateKey) as any}
+            />
+          </GeoJSONSource>
+        )}
       </MapLibreMap>
 
-      {/* Top Overlay: Template Switcher and Route Metrics */}
+      {/* Top Overlay: Template Switcher and Search */}
       <View
         pointerEvents="box-none"
         style={[styles.topOverlay, { paddingTop: TOP_INSET + 8 }]}
@@ -106,47 +166,65 @@ export default function App() {
           onSelectTemplate={setTemplateKey}
           theme={theme}
         />
-        <View style={styles.cardSpacing}>
-          <RouteCard route={routeData} theme={theme} />
+        {phase === "browse" && (
+          <View style={styles.searchWrapper}>
+            <SearchBox onSelectPlace={handleSelectPlace} theme={theme} />
+          </View>
+        )}
+      </View>
+
+      {/* Locate button: browse mode only */}
+      {phase === "browse" && (
+        <View
+          pointerEvents="box-none"
+          style={[styles.locateWrapper, { bottom: BOTTOM_INSET + 20 }]}
+        >
+          <LocateButton onPress={handleLocate} theme={theme} />
         </View>
-      </View>
+      )}
 
-      {/* Bottom Overlay: Camera Modes */}
-      <View
-        pointerEvents="box-none"
-        style={[styles.bottomOverlay, { paddingBottom: BOTTOM_INSET + 12 }]}
-      >
-        <CameraModeBar
-          currentMode={cameraMode}
-          onSelectMode={setCameraMode}
-          theme={theme}
-        />
-      </View>
+      {/* Bottom Banners: Preview or Navigation */}
+      {phase === "preview" && (
+        <View
+          pointerEvents="box-none"
+          style={[styles.bottomBannerWrapper, { paddingBottom: BOTTOM_INSET + 12 }]}
+        >
+          <PreviewBanner
+            destinationName={destination.name}
+            distanceMeters={routeDistanceMeters}
+            durationSeconds={routeDurationSeconds}
+            onStartNav={() => setPhase("nav")}
+            onBack={() => setPhase("browse")}
+            theme={theme}
+          />
+        </View>
+      )}
 
-      {/* Visible Error Banner for Map Load Failures */}
+      {phase === "nav" && (
+        <View
+          pointerEvents="box-none"
+          style={[styles.bottomBannerWrapper, { paddingBottom: BOTTOM_INSET + 12 }]}
+        >
+          <NavBanner
+            remainingMeters={simulation.remainingMeters}
+            remainingSeconds={simulation.remainingSeconds}
+            isFinished={simulation.isFinished}
+            onExit={() => setPhase("browse")}
+            theme={theme}
+          />
+        </View>
+      )}
+
       {mapError && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorTitle}>Map Load Error</Text>
-          <Text style={styles.errorText}>{mapError}</Text>
-          <TouchableOpacity
-            style={styles.errorButton}
-            onPress={() => setMapError(null)}
-          >
-            <Text style={styles.errorButtonText}>Dismiss</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorBanner message={mapError} onDismiss={() => setMapError(null)} />
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  map: { flex: 1 },
   topOverlay: {
     position: "absolute",
     top: 0,
@@ -154,51 +232,12 @@ const styles = StyleSheet.create({
     right: 16,
     gap: 8,
   },
-  cardSpacing: {
-    marginTop: 4,
-  },
-  bottomOverlay: {
+  searchWrapper: { marginTop: 2 },
+  locateWrapper: { position: "absolute", right: 20 },
+  bottomBannerWrapper: {
     position: "absolute",
     bottom: 0,
-    left: 20,
-    right: 20,
-  },
-  errorBanner: {
-    position: "absolute",
-    top: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: "#b91c1c",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 999,
-  },
-  errorTitle: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  errorText: {
-    color: "#fecaca",
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  errorButton: {
-    alignSelf: "flex-end",
-    backgroundColor: "#ffffff",
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-  errorButtonText: {
-    color: "#b91c1c",
-    fontWeight: "600",
-    fontSize: 13,
+    left: 16,
+    right: 16,
   },
 });
