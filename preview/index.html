@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GameIrl - Map Style Preview Harness</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="harness-container">
+    <div class="phone-frame">
+      <div id="map"></div>
+    </div>
+    <div class="controls-panel">
+      <div class="control-section">
+        <div class="control-label">Template</div>
+        <div class="button-stack">
+          <button id="btn-miami" class="theme-btn active" data-style="miami-6">Miami 6</button>
+          <button id="btn-1899" class="theme-btn" data-style="1899">1899</button>
+          <button id="btn-la" class="theme-btn" data-style="los-angeles">Los Angeles</button>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div class="control-label">Camera</div>
+        <div class="button-row">
+          <button id="btn-cam-browse" class="cam-btn active" data-mode="browse">Browse</button>
+          <button id="btn-cam-preview" class="cam-btn" data-mode="preview">Preview</button>
+          <button id="btn-cam-nav" class="cam-btn" data-mode="nav">Nav</button>
+        </div>
+      </div>
+
+      <div class="readout">
+        <div><span class="readout-label">Zoom:</span> <span id="readout-zoom" class="readout-val">13.00</span></div>
+        <div><span class="readout-label">Lng:</span> <span id="readout-lng" class="readout-val">-58.5887</span></div>
+        <div><span class="readout-label">Lat:</span> <span id="readout-lat" class="readout-val">-34.6439</span></div>
+      </div>
+
+      <div class="poi-inspector">
+        <div class="poi-header">
+          <span>POI Inspector</span>
+          <button id="btn-scan-poi" class="action-btn">Scan POIs</button>
+        </div>
+        <div id="poi-results" class="poi-results">Click "Scan POIs" to inspect loaded features.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

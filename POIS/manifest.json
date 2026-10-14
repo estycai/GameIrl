@@ -1,0 +1,301 @@
+{
+  "generated": "2026-10-13",
+  "source": "OpenFreeMap OpenMapTiles poi layer, 5x5 tiles at z14 around Ramos Mejia, Buenos Aires",
+  "totalFeaturesScanned": 17725,
+  "distinctClassSubclassPairs": 205,
+  "naming": "POIS/{FOLDER}/{template}_{folder_lowercase}.png",
+  "templates": [
+    "miami",
+    "1899",
+    "los_angeles"
+  ],
+  "hiddenClasses": [
+    "bus",
+    "gate",
+    "waste_basket",
+    "bollard",
+    "lift_gate",
+    "cycle_barrier",
+    "entrance",
+    "toilets",
+    "drinking_water",
+    "information",
+    "recycling",
+    "office"
+  ],
+  "categories": [
+    {
+      "folder": "FUEL",
+      "tier": 1,
+      "osmClasses": [
+        "fuel"
+      ],
+      "countInTestArea": 221,
+      "files": [
+        "POIS/FUEL/miami_fuel.png",
+        "POIS/FUEL/1899_fuel.png",
+        "POIS/FUEL/los_angeles_fuel.png"
+      ]
+    },
+    {
+      "folder": "HOSPITAL",
+      "tier": 1,
+      "osmClasses": [
+        "hospital",
+        "doctors",
+        "dentist"
+      ],
+      "countInTestArea": 346,
+      "files": [
+        "POIS/HOSPITAL/miami_hospital.png",
+        "POIS/HOSPITAL/1899_hospital.png",
+        "POIS/HOSPITAL/los_angeles_hospital.png"
+      ]
+    },
+    {
+      "folder": "POLICE",
+      "tier": 1,
+      "osmClasses": [
+        "police"
+      ],
+      "countInTestArea": 91,
+      "files": [
+        "POIS/POLICE/miami_police.png",
+        "POIS/POLICE/1899_police.png",
+        "POIS/POLICE/los_angeles_police.png"
+      ]
+    },
+    {
+      "folder": "PARKING",
+      "tier": 1,
+      "osmClasses": [
+        "parking"
+      ],
+      "countInTestArea": 397,
+      "files": [
+        "POIS/PARKING/miami_parking.png",
+        "POIS/PARKING/1899_parking.png",
+        "POIS/PARKING/los_angeles_parking.png"
+      ]
+    },
+    {
+      "folder": "BANK",
+      "tier": 1,
+      "osmClasses": [
+        "bank",
+        "atm"
+      ],
+      "countInTestArea": 302,
+      "files": [
+        "POIS/BANK/miami_bank.png",
+        "POIS/BANK/1899_bank.png",
+        "POIS/BANK/los_angeles_bank.png"
+      ]
+    },
+    {
+      "folder": "CAR",
+      "tier": 1,
+      "osmClasses": [
+        "car"
+      ],
+      "countInTestArea": 614,
+      "files": [
+        "POIS/CAR/miami_car.png",
+        "POIS/CAR/1899_car.png",
+        "POIS/CAR/los_angeles_car.png"
+      ]
+    },
+    {
+      "folder": "SCHOOL",
+      "tier": 1,
+      "osmClasses": [
+        "school",
+        "college",
+        "library"
+      ],
+      "countInTestArea": 552,
+      "files": [
+        "POIS/SCHOOL/miami_school.png",
+        "POIS/SCHOOL/1899_school.png",
+        "POIS/SCHOOL/los_angeles_school.png"
+      ]
+    },
+    {
+      "folder": "RESTAURANT",
+      "tier": 1,
+      "osmClasses": [
+        "restaurant"
+      ],
+      "countInTestArea": 503,
+      "files": [
+        "POIS/RESTAURANT/miami_restaurant.png",
+        "POIS/RESTAURANT/1899_restaurant.png",
+        "POIS/RESTAURANT/los_angeles_restaurant.png"
+      ]
+    },
+    {
+      "folder": "FAST_FOOD",
+      "tier": 2,
+      "osmClasses": [
+        "fast_food"
+      ],
+      "countInTestArea": 303,
+      "files": [
+        "POIS/FAST_FOOD/miami_fast_food.png",
+        "POIS/FAST_FOOD/1899_fast_food.png",
+        "POIS/FAST_FOOD/los_angeles_fast_food.png"
+      ]
+    },
+    {
+      "folder": "CAFE",
+      "tier": 2,
+      "osmClasses": [
+        "cafe",
+        "ice_cream"
+      ],
+      "countInTestArea": 320,
+      "files": [
+        "POIS/CAFE/miami_cafe.png",
+        "POIS/CAFE/1899_cafe.png",
+        "POIS/CAFE/los_angeles_cafe.png"
+      ]
+    },
+    {
+      "folder": "BAR",
+      "tier": 2,
+      "osmClasses": [
+        "bar",
+        "beer",
+        "alcohol_shop"
+      ],
+      "countInTestArea": 142,
+      "files": [
+        "POIS/BAR/miami_bar.png",
+        "POIS/BAR/1899_bar.png",
+        "POIS/BAR/los_angeles_bar.png"
+      ]
+    },
+    {
+      "folder": "SHOP",
+      "tier": 2,
+      "osmClasses": [
+        "shop"
+      ],
+      "countInTestArea": 2519,
+      "files": [
+        "POIS/SHOP/miami_shop.png",
+        "POIS/SHOP/1899_shop.png",
+        "POIS/SHOP/los_angeles_shop.png"
+      ]
+    },
+    {
+      "folder": "GROCERY",
+      "tier": 2,
+      "osmClasses": [
+        "grocery"
+      ],
+      "countInTestArea": 559,
+      "files": [
+        "POIS/GROCERY/miami_grocery.png",
+        "POIS/GROCERY/1899_grocery.png",
+        "POIS/GROCERY/los_angeles_grocery.png"
+      ]
+    },
+    {
+      "folder": "PHARMACY",
+      "tier": 2,
+      "osmClasses": [
+        "pharmacy"
+      ],
+      "countInTestArea": 239,
+      "files": [
+        "POIS/PHARMACY/miami_pharmacy.png",
+        "POIS/PHARMACY/1899_pharmacy.png",
+        "POIS/PHARMACY/los_angeles_pharmacy.png"
+      ]
+    },
+    {
+      "folder": "PARK",
+      "tier": 2,
+      "osmClasses": [
+        "park",
+        "playground",
+        "picnic_site"
+      ],
+      "countInTestArea": 1101,
+      "files": [
+        "POIS/PARK/miami_park.png",
+        "POIS/PARK/1899_park.png",
+        "POIS/PARK/los_angeles_park.png"
+      ]
+    },
+    {
+      "folder": "CLOTHING",
+      "tier": 3,
+      "osmClasses": [
+        "clothing_store"
+      ],
+      "countInTestArea": 444,
+      "files": [
+        "POIS/CLOTHING/miami_clothing.png",
+        "POIS/CLOTHING/1899_clothing.png",
+        "POIS/CLOTHING/los_angeles_clothing.png"
+      ]
+    },
+    {
+      "folder": "HAIRDRESSER",
+      "tier": 3,
+      "osmClasses": [
+        "hairdresser"
+      ],
+      "countInTestArea": 161,
+      "files": [
+        "POIS/HAIRDRESSER/miami_hairdresser.png",
+        "POIS/HAIRDRESSER/1899_hairdresser.png",
+        "POIS/HAIRDRESSER/los_angeles_hairdresser.png"
+      ]
+    },
+    {
+      "folder": "WORSHIP",
+      "tier": 3,
+      "osmClasses": [
+        "place_of_worship"
+      ],
+      "countInTestArea": 212,
+      "files": [
+        "POIS/WORSHIP/miami_worship.png",
+        "POIS/WORSHIP/1899_worship.png",
+        "POIS/WORSHIP/los_angeles_worship.png"
+      ]
+    },
+    {
+      "folder": "SPORT",
+      "tier": 3,
+      "osmClasses": [
+        "sports_centre",
+        "pitch",
+        "swimming_pool",
+        "stadium"
+      ],
+      "countInTestArea": 949,
+      "files": [
+        "POIS/SPORT/miami_sport.png",
+        "POIS/SPORT/1899_sport.png",
+        "POIS/SPORT/los_angeles_sport.png"
+      ]
+    },
+    {
+      "folder": "TOLL_BOOTH",
+      "tier": 3,
+      "osmClasses": [
+        "toll_booth"
+      ],
+      "countInTestArea": 36,
+      "files": [
+        "POIS/TOLL_BOOTH/miami_toll_booth.png",
+        "POIS/TOLL_BOOTH/1899_toll_booth.png",
+        "POIS/TOLL_BOOTH/los_angeles_toll_booth.png"
+      ]
+    }
+  ]
+}

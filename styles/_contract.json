@@ -1,0 +1,35 @@
+{
+  "requiredSources": [
+    "openmaptiles"
+  ],
+  "requiredLayers": [
+    "background",
+    "landcover-sand",
+    "park",
+    "landuse-residential",
+    "water",
+    "waterway",
+    "building",
+    "tunnel-casing",
+    "road-minor",
+    "road-secondary-tertiary",
+    "road-primary",
+    "road-motorway",
+    "boundary",
+    "poi-circle",
+    "poi-label",
+    "road-name",
+    "water-name",
+    "place-neighbourhood",
+    "place-city"
+  ],
+  "overlayAnchor": "poi-circle",
+  "overlayLayers": [
+    "route-casing",
+    "route-line",
+    "route-endpoint-circle",
+    "route-endpoint-label",
+    "user-puck-halo",
+    "user-puck-core"
+  ]
+}

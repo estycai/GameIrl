@@ -1,0 +1,288 @@
+tiles=25 z=14 center=[5525,9874] poiFeatures=17725 distinctPairs=205
+
+ 5069  bus / bus_stop
+  773  park / park
+  503  restaurant / restaurant
+  434  clothing_store / clothes
+  397  parking / parking
+  363  school / school
+  360  shop / convenience
+  325  pitch / soccer
+  316  car / car_repair
+  303  grocery / supermarket
+  300  fast_food / fast_food
+  299  playground / playground
+  269  gate / gate
+  248  butcher / butcher
+  239  bakery / bakery
+  239  pharmacy / pharmacy
+  221  fuel / fuel
+  213  bank / bank
+  191  hospital / clinic
+  189  place_of_worship / christian
+  189  shop / kiosk
+  184  ice_cream / ice_cream
+  179  shop / hardware
+  163  office / estate_agent
+  161  hairdresser / hairdresser
+  160  grocery / greengrocer
+  158  car / car
+  150  sports_centre / sports_centre
+  148  waste_basket / waste_basket
+  146  pitch / tennis
+  140  car / car_parts
+  136  cafe / cafe
+  126  shop / pet
+  112  shop / optician
+  107  shop / furniture
+  107  shop / paint
+  106  office / taxi
+  105  town_hall / community_centre
+  103  shop / shoes
+  101  shop / electronics
+   95  office / company
+   94  swimming_pool / swimming_pool
+   91  police / police
+   91  shop / newsagent
+   90  bicycle / bicycle
+   89  atm / atm
+   80  pitch / ?
+   80  grocery / deli
+   79  office / insurance
+   77  veterinary / veterinary
+   77  shop / beauty
+   76  toilets / toilets
+   74  shop / mobile_phone
+   73  shop / stationery
+   71  hospital / hospital
+   68  school / kindergarten
+   67  information / board
+   66  office / government
+   64  bar / bar
+   62  shop / chemist
+   57  shop / motorcycle
+   55  office / lawyer
+   51  entrance / train_station_entrance
+   49  shop / computer
+   48  shop / mall
+   48  doctors / doctors
+   44  shop / toys
+   43  shop / bed
+   42  shop / copyshop
+   39  office / educational_institution
+   38  college / college
+   38  library / books
+   37  shop / wholesale
+   36  toll_booth / toll_booth
+   36  dentist / dentist
+   36  lift_gate / lift_gate
+   35  recycling / recycling
+   34  shop / perfumery
+   33  shop / locksmith
+   33  art_gallery / artwork
+   32  shop / sports
+   32  shop / fabric
+   31  shop / florist
+   29  theatre / theatre
+   28  shop / jewelry
+   28  alcohol_shop / alcohol
+   27  museum / museum
+   27  beer / pub
+   26  post / post_office
+   26  shop / garden_centre
+   26  pitch / athletics
+   25  shop / gift
+   23  college / university
+   22  library / library
+   22  shop / interior_decoration
+   22  bollard / bollard
+   21  shop / confectionery
+   21  shop / ticket
+   21  picnic_site / picnic_site
+   20  shop / photo
+   20  railway / station
+   20  shop / travel_agency
+   18  pitch / basketball
+   18  monument / monument
+   17  laundry / laundry
+   16  drinking_water / drinking_water
+   16  fire_station / fire_station
+   16  office / telecommunication
+   16  pitch / padel
+   15  town_hall / townhall
+   15  cycle_barrier / cycle_barrier
+   15  athletics / athletics
+   14  shop / tattoo
+   14  office / association
+   14  garden / garden
+   14  motorcycle_parking / motorcycle_parking
+   13  shop / doityourself
+   13  cinema / cinema
+   13  running / running
+   13  pitch / volleyball
+   13  bar / nightclub
+   13  telephone / telephone
+   13  office / political_party
+   12  place_of_worship / ?
+   12  lodging / hotel
+   12  shop / erotic
+   12  shelter / shelter
+   12  pitch / paddle_tennis
+   11  town_hall / courthouse
+   11  shop / cosmetics
+   11  office / notary
+   10  office / travel_agent
+   10  clothing_store / bag
+   10  office / union
+   10  pitch / multi
+   10  pitch / beachvolleyball
+    9  cemetery / cemetery
+    9  grocery / department_store
+    9  laundry / dry_cleaning
+    9  pitch / rugby_union
+    9  stadium / stadium
+    9  bus / bus_station
+    8  shop / outdoor
+    8  office / financial
+    8  information / terminal
+    8  stadium / soccer
+    8  park / bbq
+    7  art_gallery / arts_centre
+    7  shop / video_games
+    7  grocery / marketplace
+    7  brownfield / brownfield
+    7  bicycle_parking / bicycle_parking
+    6  place_of_worship / jewish
+    6  music / music
+    6  lodging / guest_house
+    6  shop / general
+    6  shop / antiques
+    6  alcohol_shop / wine
+    5  golf / golf_course
+    5  art_gallery / art
+    5  office / courier
+    5  music / musical_instrument
+    4  shop / second_hand
+    4  shop / video
+    4  information / map
+    4  multi / multi
+    4  castle / ruins
+    4  pitch / skateboard
+    4  alcohol_shop / beverages
+    4  pitch / handball
+    4  place_of_worship / shinto
+    4  post / post_box
+    4  pitch / futsal
+    4  office / water_utility
+    4  water_park / water_park
+    4  pitch / field_hockey
+    3  shop / watches
+    3  attraction / attraction
+    3  office / advertising_agency
+    3  office / energy_supplier
+    3  office / architect
+    3  office / ngo
+    3  fast_food / food_court
+    2  lodging / hostel
+    2  office / religion
+    2  cycling / cycling
+    2  pitch / paddle
+    2  aquarium / aquarium
+    2  shop / hearing_aids
+    2  office / accountant
+    2  pitch / football
+    2  pitch / gymnastics
+    2  office / consulting
+    2  information / guidepost
+    2  office / newspaper
+    1  lodging / chalet
+    1  swimming / swimming
+    1  pitch / basketball;soccer;handball;volleyball
+    1  shop / tobacco
+    1  shop / chocolate
+    1  railway / halt
+    1  yoga / yoga
+    1  shop / coffee
+    1  place_of_worship / movimiento_de_los_santos_de_los_últimos_días
+    1  office / property_management
+
+=== BY CLASS ===
+ 5078  bus
+ 2519  shop
+  781  park
+  715  office
+  688  pitch
+  614  car
+  559  grocery
+  503  restaurant
+  444  clothing_store
+  431  school
+  397  parking
+  303  fast_food
+  299  playground
+  269  gate
+  262  hospital
+  248  butcher
+  239  bakery
+  239  pharmacy
+  221  fuel
+  213  bank
+  212  place_of_worship
+  184  ice_cream
+  161  hairdresser
+  150  sports_centre
+  148  waste_basket
+  136  cafe
+  131  town_hall
+   94  swimming_pool
+   91  police
+   90  bicycle
+   89  atm
+   81  information
+   77  veterinary
+   77  bar
+   76  toilets
+   61  college
+   60  library
+   51  entrance
+   48  doctors
+   45  art_gallery
+   38  alcohol_shop
+   36  toll_booth
+   36  dentist
+   36  lift_gate
+   35  recycling
+   30  post
+   29  theatre
+   27  museum
+   27  beer
+   26  laundry
+   22  bollard
+   21  picnic_site
+   21  railway
+   21  lodging
+   18  monument
+   17  stadium
+   16  drinking_water
+   16  fire_station
+   15  cycle_barrier
+   15  athletics
+   14  garden
+   14  motorcycle_parking
+   13  cinema
+   13  running
+   13  telephone
+   12  shelter
+   11  music
+    9  cemetery
+    7  brownfield
+    7  bicycle_parking
+    5  golf
+    4  multi
+    4  castle
+    4  water_park
+    3  attraction
+    2  cycling
+    2  aquarium
+    1  swimming
+    1  yoga

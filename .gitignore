@@ -1,0 +1,10 @@
+.claude/settings.local.json
+
+# Tooling caches
+.atl/
+
+# Vendored MapLibre style spec, pulled on demand by the sdk-support lint
+v8.json
+
+node_modules/
+.DS_Store
