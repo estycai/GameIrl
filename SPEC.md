@@ -330,6 +330,17 @@ whole 6.9 km route, and Nav applies zoom 17, the computed bearing and pitch 60 �
 visible as perspective convergence and as POI circles scaling with distance,
 since `circle-pitch-scale` defaults to `map`.
 
+The full browse -> preview -> nav flow is confirmed there too: search filtering,
+selecting a result, the preview banner, INICIAR, the simulated drive advancing
+and the countdown falling, exiting back to browse, the locate button, and the
+new chrome themed correctly in every template.
+
+Screenshots are the weakest evidence in this repo and they have already misled
+twice — a camera mode change that turned out to be a stray tap, and a pitch that
+looked flat but was not. When a colour or a position is the question, sample the
+pixels instead of looking: `adb exec-out screencap -p` gives a plain 8-bit PNG
+that forty lines of `zlib.inflateSync` will decode.
+
 Still unverified: rendering on real phone hardware, and iOS entirely.
 
 ## 8. Out of scope right now
@@ -473,3 +484,45 @@ overlay position, source resolution, and the absence of duplicate layer ids.
 Browse (pitch 0, z13), Preview (fits the route bounds), Nav (pitch 60, z17,
 bearing down the route). `pitch` 60 is MapLibre Native's ceiling — it is not a
 starting point to tune upward.
+
+### The browse -> preview -> nav flow
+
+The camera mode is not something the user picks. `AppPhase` is what the user is
+doing and `cameraModeForPhase` maps it to a camera mode; the two types stay
+distinct because they coincide today and may not later.
+
+  browse   search field + locate button
+           selecting a search result -> preview
+  preview  bottom banner: destination, distance, duration, INICIAR
+           INICIAR -> nav, back -> browse
+  nav      simulated drive, following camera, countdown banner
+           exit -> browse
+
+**What is real and what is fixture.** Tomorrow's reader needs this separation
+more than anything else in this section.
+
+| Piece | Status |
+| --- | --- |
+| Map tiles, styles, overlay, camera | Real |
+| Route geometry, distance, duration | Real — the OSRM demo fixture |
+| Bearing, bounds, progress along the route | Really computed from that geometry |
+| Search results | Hardcoded fixtures in `app/src/search/places.ts`. No geocoder. |
+| The route for a chosen destination | Always the same demo polyline. There is one route fixture. |
+| "Current location" | The route's origin point. No GPS, no location permission. |
+| Driving | Simulated at six times real speed. No GPS. |
+
+Remaining time in the nav banner is derived from the route's real average speed,
+not the simulation's, so the figure stays in real-world terms while the demo
+finishes in about two minutes instead of eleven.
+
+### The moving vehicle takes the template's own puck paint
+
+`app/src/nav/vehiclePaint.ts` reads `user-puck-halo` and `user-puck-core` out of
+`_overlay.json` for the active template. Do not re-derive it from the UI theme
+tokens. That was tried and failed twice on device: `accentContrast` is the
+template's background colour, so a core painted with it punched a hole in the
+map, and `accent` in miami-6 is the same cyan as the route line, so the vehicle
+vanished into its own route. The puck paints are already tuned per template.
+
+The contract check already requires both puck layers in every template, so the
+lookup cannot silently miss.
