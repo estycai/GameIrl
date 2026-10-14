@@ -1,0 +1,10 @@
+{
+  "background": "#cfcac2",
+  "surface": "rgba(235, 232, 227, 0.94)",
+  "surfaceBorder": "#aeb89c",
+  "textPrimary": "#2e2a24",
+  "textSecondary": "#6b645a",
+  "accent": "#5c6b47",
+  "accentContrast": "#f3f1ec",
+  "shadow": "rgba(46, 42, 36, 0.18)"
+}

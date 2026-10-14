@@ -39,7 +39,7 @@ Any proposal that pulls car-screen work into Phase 1 is out of scope.
 
 | Target | Path | Cost |
 | --- | --- | --- |
-| Android APK | EAS Build produces an installable APK, sideload it | Free |
+| Android APK | **Local Gradle `assembleRelease`** on this Windows machine, sideload it. See section 7 for the working configuration. No cloud build — the project owner ruled EAS out. | Free |
 | iOS on a physical device, from Windows | EAS Build compiles in the cloud | **USD 99/yr Apple Developer** |
 | iOS on a physical device, with a Mac | Xcode + free Personal Team | Free, but the profile **expires every 7 days** and max 3 apps per device |
 | iOS Simulator | Requires a Mac | Free |
@@ -103,14 +103,20 @@ over the 1899 parchment destroys the template. The RN shell loads both files.
 
 ```json
 "openmaptiles": { "type": "vector", "url": "https://tiles.openfreemap.org/planet" }
-"route":        { "type": "geojson", "data": "../data/route-demo.geojson" }
 ```
 
-Route, endpoints and user puck are layers **inside each style JSON**, not added
-from app code. Each template defines its own route appearance, and the layers
-survive `setStyle()` with no re-adding logic.
+The `route` source and its layers are NOT inside the style files. They live in
+`styles/_overlay.json`, per template, and are applied on top of whichever
+template is active — `applyOverlay()` in the harness, `buildStyle()` in the RN
+shell. `styles/_contract.json` names the layer ids every template must expose
+and the anchor the overlay is inserted before.
 
-Route-source layers present in all three styles:
+Each template still defines its own route appearance; what changed is where that
+definition lives. The relative path `"data": "../data/route-demo.geojson"` is
+gone — it could never resolve on a device. The overlay file stores `"data": null`
+and the real GeoJSON is supplied at runtime.
+
+Route-source layers, defined per template in `_overlay.json`:
 `route-casing`, `route-line`, `route-endpoint-circle`, `route-endpoint-label`,
 `user-puck-halo`, `user-puck-core`.
 
@@ -245,14 +251,99 @@ the browser blocks the `fetch()` of the style JSONs. Serve with
 
 **The MapLibre GL JS global is `maplibregl`, not `maplibre`.**
 
+### React Native shell traps — all three found during the first build
+
+**There is no global `structuredClone` in React Native 0.86.** The implementation
+ships at `react-native/src/private/webapis/structuredClone/` but nothing in
+`setUpDefaultReactNativeEnvironment` or `src/private/setup/` installs it as a
+global, so on Hermes the call is a `ReferenceError` at first render. The release
+build succeeds regardless, which makes it invisible until the APK is installed.
+Use a JSON round-trip — style specifications and GeoJSON are plain JSON anyway.
+
+**`@maplibre/maplibre-react-native` v11 exports a component named `Map`, which
+shadows the JavaScript `Map` constructor.** `import { Map } from
+"@maplibre/maplibre-react-native"` followed by `new Map()` constructs a React
+component, not a hash map. Import it aliased. `tsc --noEmit` catches this; the
+Metro bundler does not.
+
+**v11 renamed `MapView` to `Map`.** There is no `MapLibreGL` default export
+either. Any agent writing from memory will produce the v10 API. Read
+`node_modules/@maplibre/maplibre-react-native/src/index.ts` and pass the real
+names in the prompt.
+
+**`Map` accepts `mapStyle` as a `StyleSpecification` OBJECT.** That is why the RN
+shell merges the overlay into the style before handing it over, instead of
+porting the harness's post-`style.load` injection. There is no listener to order
+and no `setStyle` teardown to survive, so the whole class of ordering bug the
+harness hit cannot occur on device. Do not "port it faithfully" back.
+
+### Local Android build — the working configuration
+
+Build on this machine, not in the cloud. What it needs:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `JAVA_HOME` | Android Studio's bundled JBR 21 | The JDK on PATH is Java 20 |
+| `ANDROID_HOME` | `%LOCALAPPDATA%\Android\Sdk` | Not set in the environment |
+| `reactNativeArchitectures` | `arm64-v8a,x86_64` | All four ABIs exhaust the disk; `x86_64` is what the emulators run |
+| `org.gradle.jvmargs` | `-Xmx4096m` | The 2048m default is tight for RN 0.86 |
+
+Build it with `npm run apk` from `app/`. That syncs the assets, then runs the
+Gradle wrapper through `scripts/build-apk.mjs`, which spawns it with an explicit
+cwd and a quoted path — npm runs scripts through cmd on Windows, where the
+current directory is not on PATH and this repo's path contains spaces. The SDK
+and JDK locations come from `android/local.properties` and
+`android/gradle.properties`, so no environment setup is needed. The script fails
+loudly if Gradle reports success without producing the APK.
+
+`assembleRelease` signs with the debug keystore, so the APK sideloads with no
+keystore setup. `reactNativeArchitectures` is mirrored in `app/app.json` under
+`expo-build-properties.android.buildArchs` so `expo prebuild` does not revert it
+— but the `jvmargs` bump lives only in `android/gradle.properties` and IS lost on
+`prebuild --clean`. Re-apply it.
+
+**Disk is the binding constraint on this machine.** A four-ABI release build ran
+it to zero and failed with `Espacio en disco insuficiente`, surfacing as four
+unrelated-looking Gradle errors including `Error while dexing`. If a build fails
+in several places at once, check free space before reading the stack traces.
+
+**Memory is the second constraint.** Running the Gradle build and the Android
+emulator at the same time exhausted system memory and both were killed. Do them
+one at a time.
+
+### Verifying on the emulator
+
+Every AVD and system image on this machine is **x86_64**, so the APK is built
+for `arm64-v8a,x86_64` — the first for a real phone, the second so the same
+artifact installs on an emulator. An arm64-only APK will not install on any of
+them. Keep `reactNativeArchitectures` and `buildArchs` in step with each other
+and with whatever was actually verified; if they diverge, a later `npm run apk`
+silently produces a different artifact than the one that was validated.
+
+Run the emulator and the Gradle build one at a time — together they exhausted
+system memory and both were killed.
+
+**Rendering is confirmed on the emulator** (AVD `New_Hard`, API 36, x86_64).
+All three templates draw with live OpenFreeMap tiles over the Ramos Mejia test
+area, the overlay route and puck appear in every template, Preview fits the
+whole 6.9 km route, and Nav applies zoom 17, the computed bearing and pitch 60 —
+visible as perspective convergence and as POI circles scaling with distance,
+since `circle-pitch-scale` defaults to `map`.
+
+Still unverified: rendering on real phone hardware, and iOS entirely.
+
 ## 8. Out of scope right now
 
 Backend, user accounts, subscriptions, real GPS and location permissions,
 background location, turn-by-turn voice, route recalculation, the routing engine
-choice, CarPlay, Android Auto, and the React Native shell itself.
+choice, CarPlay, and Android Auto.
 
-Current work is the web harness and the three templates. Scaling scope up is the
-user's call, not an agent's.
+The React Native shell left this list on 2026-10-13, on the project owner's
+instruction, and now lives in `app/`. Phase 1 has started. Everything else above
+is still out of scope — in particular the shell draws the user puck from the
+demo route's origin point and requests no location permission.
+
+Scaling scope up is the user's call, not an agent's.
 
 ## 9. Conventions
 
@@ -288,6 +379,14 @@ verified URLs, schema field names, tile endpoints, file contents.
 Long conversation id for the harness work: `d959f1fa-51ec-48fb-a060-816f74dcbe9b`.
 Continuing it preserves everything `agy` already knows about the harness.
 
+Conversation id for the React Native shell: `59dcd6c1-2efe-4034-9f96-d30463f77549`.
+
+That dispatch took about 3 minutes, not hours — because the prompt carried the
+verified v11 API read out of `node_modules`, the exact asset filenames, the
+overlay and contract shapes, and the route's feature properties. `agy` had
+nothing to look up. The cost of a dispatch tracks how much the orchestrator
+supplies, not how big the feature is.
+
 **Cost of a dispatch is measured in hours, not minutes.** The v1 harness took 2
 minutes; the v2 feature jump took 51; the contract refactor took 3.5 hours. Use
 `agy` for feature-sized work. Tuning a hex value or fixing a one-line bug is
@@ -303,7 +402,74 @@ npx -p @maplibre/maplibre-gl-style-spec gl-style-validate styles/<name>.json
 node --check preview/app.js
 ```
 
+For anything touching `app/`, add from inside it:
+
+```bash
+npx tsc --noEmit        # catches the shadowed-Map class of bug; Metro does not
+npm run verify          # compiles and exercises the real buildStyle and camera code
+```
+
+`npm run verify` is the device-free half of the gate. It builds all three styles
+through the real `buildStyle`, asserts the overlay lands immediately before the
+contract anchor, proves the function is pure against the shared JSON modules,
+and checks the bearing, bounds and camera presets — all things that compile,
+build a working APK, and still cannot be judged from a screenshot. A bearing
+180 degrees wrong renders a perfectly plausible map. It prints the merged styles'
+paths so `gl-style-validate` can be run on what the device actually renders,
+rather than on the pre-merge source.
+
 Bugs caught this way so far: `maplibre.Map` instead of `maplibregl.Map` (blank
 page), two zoom-based `interpolate`s in one expression in all three styles (black
 map), and `style.load` registered after `setStyle` (overlays applied one template
 behind). None of them were visible from the delivery report.
+
+Bugs caught in the React Native shell delivery: `structuredClone` on a runtime
+that has no such global, and `new Map()` against the shadowed MapLibre `Map`
+component. Both compile. Both crash at first render. Neither appeared in the
+delivery report, which listed them under "what now works".
+
+## 11. The React Native shell
+
+Lives in `app/`. Expo SDK 57, React Native 0.86, MapLibre RN v11.
+
+### Assets are copied, not cross-imported
+
+`app/scripts/sync-assets.mjs` copies the styles, the overlay, the contract, the
+UI token files and the demo route from the repo root into
+`app/assets/templates/`. That folder is generated and gitignored; the repo root
+stays the single source of truth.
+
+Metro only resolves modules under its project root, and cross-root resolution
+behaves differently between the dev server and the Gradle release bundle, so a
+copy is deliberate — it keeps the bundler configuration stock. The route is
+copied to `route-demo.json` because Metro's JSON transformer keys on the `.json`
+extension; a `.geojson` import is parsed as JavaScript and throws.
+
+Every npm script that builds or starts runs the sync first. A missing asset
+fails the sync rather than bundling a half-built template.
+
+### A template is still two files
+
+`styles/{key}.ui.json` now exists for all three templates and holds the UI
+chrome tokens. `app/src/theme/themes.ts` IMPORTS those files — it does not
+restate the values. Retune a palette in one place.
+
+### The overlay merge
+
+`app/src/style/buildStyle.ts` is a pure function: clone the base style, add the
+`route` source with the real GeoJSON in place of the overlay file's `null`
+placeholder, splice the six overlay layers in immediately before the contract's
+`overlayAnchor`, and throw if the anchor is missing rather than appending
+silently.
+
+It is verified without a device by compiling it, building all three styles, and
+running `gl-style-validate` on the MERGED output — which is what the device
+actually renders. The checks also assert purity (building twice does not
+accumulate layers, and mutating a result does not leak into the shared module),
+overlay position, source resolution, and the absence of duplicate layer ids.
+
+### Camera
+
+Browse (pitch 0, z13), Preview (fits the route bounds), Nav (pitch 60, z17,
+bearing down the route). `pitch` 60 is MapLibre Native's ceiling — it is not a
+starting point to tune upward.

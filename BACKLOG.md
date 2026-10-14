@@ -110,6 +110,13 @@ divergence compounds it.
 
 ## 4. POI density and collision — the manifest has no rendering consequence
 
+> **Confirmed on device, 2026-10-14.** Seen on the Android emulator in Nav mode
+> (pitch 60, z17) across all three templates: the map is buried under POI dots,
+> and they dominate the exact view the product is used in. This is no longer a
+> prediction from reading the styles. It is now the most visible defect in the
+> app, and it ranks above everything else in this file for that reason.
+
+
 `poi-circle` has `minzoom: 11` and **no filter** in any style. `manifest.json`
 declares `hiddenClasses` headed by `bus` — 5,069 of 17,725 features, 29% of
 everything — and it is currently being drawn. The three tiers affect nothing. And

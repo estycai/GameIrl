@@ -1,0 +1,30 @@
+{
+  "name": "gameirl",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@maplibre/maplibre-react-native": "^11.5.0",
+    "@types/geojson": "^7946.0.16",
+    "expo": "~57.0.28",
+    "expo-build-properties": "~57.0.22",
+    "expo-dev-client": "~57.0.20",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "sync-assets": "node scripts/sync-assets.mjs",
+    "prestart": "npm run sync-assets",
+    "start": "expo start --dev-client",
+    "android": "npm run sync-assets && expo run:android",
+    "ios": "npm run sync-assets && expo run:ios",
+    "prebuild": "npm run sync-assets && expo prebuild --clean",
+    "apk": "npm run sync-assets && node scripts/build-apk.mjs",
+    "verify": "npm run sync-assets && node scripts/verify-logic.mjs"
+  },
+  "private": true
+}
