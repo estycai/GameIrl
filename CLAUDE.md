@@ -14,4 +14,5 @@ Then read `README.md` for the product overview and the POI construction method.
 - `source-layer` values come from the OpenMapTiles list in `SPEC.md`. Never invent one.
 - All code, comments, identifiers, UI copy and docs in English.
 - Claude orchestrates and reviews; `agy` writes feature code. See `SPEC.md` section 10.
+- Every feature passes Android QA by an independent Tester before any push. See `AGENTS.md` and `docs/QA-PROTOCOL.md`.
 - Report what you could not verify. Do not claim something works when you did not run it.
