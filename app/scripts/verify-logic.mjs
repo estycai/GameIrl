@@ -65,7 +65,12 @@ try {
       'src/camera/cameraModes.ts',
       'src/nav/routeProgress.ts',
       'src/search/places.ts',
+      'src/search/normalize.ts',
+      'src/search/photon.ts',
+      'src/search/history.ts',
+      'src/search/suggestions.ts',
     );
+
   } catch (error) {
     const text = String(error.stdout ?? '') + String(error.stderr ?? '');
     if (!/TS5107/.test(text)) throw error;
@@ -83,6 +88,24 @@ try {
     require_(join(outDir, 'src', 'nav', 'routeProgress.js'));
   const { PLACES, searchPlaces } =
     require_(join(outDir, 'src', 'search', 'places.js'));
+  const { normalizeString } =
+    require_(join(outDir, 'src', 'search', 'normalize.js'));
+  const {
+    PHOTON_BIAS,
+    buildPhotonUrl,
+    mapPhotonResponse,
+    localBbox,
+    splitHouseNumber,
+    sortByDistance,
+    rankStreets,
+    streetFallbackPlaces,
+    fetchPhotonPlaces,
+  } = require_(join(outDir, 'src', 'search', 'photon.js'));
+  const { HISTORY_MAX, addToHistory, matchHistory, parseHistory } =
+    require_(join(outDir, 'src', 'search', 'history.js'));
+  const { mergeSuggestions, highlightSegments, SUGGESTION_LIMIT } =
+    require_(join(outDir, 'src', 'search', 'suggestions.js'));
+
 
   const route = JSON.parse(
     readFileSync(join(REPO_ROOT, 'data', 'route-demo.geojson'), 'utf8'),
@@ -294,6 +317,322 @@ try {
   check('the first fixture is the demo route\'s real destination',
     PLACES[0].center[0] === dest.geometry.coordinates[0] &&
     PLACES[0].center[1] === dest.geometry.coordinates[1]);
+
+  // --- photon -------------------------------------------------------------
+
+  console.log('\nphoton');
+  const url = buildPhotonUrl('estadio jose');
+  check('buildPhotonUrl contains q=estadio%20jose', url.includes('q=estadio%20jose'));
+  check('buildPhotonUrl contains both osm_tag exclusions',
+    url.includes('osm_tag=!highway:bus_stop') && url.includes('osm_tag=!public_transport'));
+  check('buildPhotonUrl contains lat, lon, zoom, location_bias_scale, limit',
+    url.includes('lat=-34.6438617') &&
+    url.includes('lon=-58.588705') &&
+    url.includes('zoom=14') &&
+    url.includes('location_bias_scale=0.2') &&
+    url.includes('limit=8'));
+
+  const photonEstadioRaw = readFileSync(
+    join(APP_DIR, 'scripts', 'fixtures', 'photon-estadio-jose.json'),
+    'utf8',
+  );
+  const estadioPlaces = mapPhotonResponse(JSON.parse(photonEstadioRaw));
+  check('mapPhotonResponse on photon-estadio-jose: first place is Estadio José Amalfitani',
+    estadioPlaces.length > 0 && estadioPlaces[0].name === 'Estadio José Amalfitani');
+  check('mapPhotonResponse on photon-estadio-jose: first place detail includes Liniers',
+    estadioPlaces.length > 0 && estadioPlaces[0].detail.includes('Liniers'));
+  check('mapPhotonResponse on photon-estadio-jose: first place center is [-58.5206788, -34.6353382]',
+    estadioPlaces.length > 0 &&
+    estadioPlaces[0].center[0] === -58.5206788 &&
+    estadioPlaces[0].center[1] === -34.6353382);
+  check('mapPhotonResponse on photon-estadio-jose: ids unique',
+    new Set(estadioPlaces.map((p) => p.id)).size === estadioPlaces.length);
+  check('mapPhotonResponse on photon-estadio-jose: all centers finite',
+    estadioPlaces.every((p) =>
+      Array.isArray(p.center) &&
+      p.center.length === 2 &&
+      Number.isFinite(p.center[0]) &&
+      Number.isFinite(p.center[1])));
+
+  const photonRivadavia2197Raw = readFileSync(
+    join(APP_DIR, 'scripts', 'fixtures', 'photon-rivadavia-2197.json'),
+    'utf8',
+  );
+  const rivadavia2197Places = mapPhotonResponse(JSON.parse(photonRivadavia2197Raw));
+  check('mapPhotonResponse on photon-rivadavia-2197: every place has non-empty name containing Rivadavia 2197',
+    rivadavia2197Places.length > 0 &&
+    rivadavia2197Places.every((p) => p.name.includes('Rivadavia 2197')));
+
+  const photonRivadRaw = readFileSync(
+    join(APP_DIR, 'scripts', 'fixtures', 'photon-rivad.json'),
+    'utf8',
+  );
+  const rivadPlaces = mapPhotonResponse(JSON.parse(photonRivadRaw));
+  const rivadKeys = rivadPlaces.map((p) => `${normalizeString(p.name)}|${normalizeString(p.detail)}`);
+  check('mapPhotonResponse on photon-rivad: no two places share normalized name|detail',
+    new Set(rivadKeys).size === rivadPlaces.length);
+  const rawRivadParsed = JSON.parse(photonRivadRaw);
+  check('photon-rivad fixture contains no osm bus_stop tag',
+    rawRivadParsed.features.every((f) =>
+      !(f.properties.osm_key === 'highway' && f.properties.osm_value === 'bus_stop')));
+
+  check('mapPhotonResponse(null) returns []', Array.isArray(mapPhotonResponse(null)) && mapPhotonResponse(null).length === 0);
+  check('mapPhotonResponse({}) returns []', Array.isArray(mapPhotonResponse({})) && mapPhotonResponse({}).length === 0);
+  check('mapPhotonResponse({features: "x"}) returns []', Array.isArray(mapPhotonResponse({ features: 'x' })) && mapPhotonResponse({ features: 'x' }).length === 0);
+
+  // Task 3 additions
+  const expectedOldUrl = 'https://photon.komoot.io/api/?q=estadio%20jose&limit=8&lat=-34.6438617&lon=-58.588705&zoom=14&location_bias_scale=0.2&osm_tag=!highway:bus_stop&osm_tag=!public_transport';
+  check('buildPhotonUrl("estadio jose") with no options equals exactly the old URL',
+    buildPhotonUrl('estadio jose') === expectedOldUrl);
+
+  const biasHaedo = { lat: -34.6438617, lon: -58.588705 };
+  const bboxUrl = buildPhotonUrl('x', biasHaedo, { bbox: localBbox(biasHaedo), layer: 'street' });
+  check('buildPhotonUrl with bbox and layer contains formatted bbox and layer=street',
+    bboxUrl.includes('bbox=-59.088705,-35.143862,-58.088705,-34.143862') &&
+    bboxUrl.includes('&layer=street'));
+
+  check('splitHouseNumber: "edison 3580" -> {street:"edison", number:"3580"}',
+    JSON.stringify(splitHouseNumber('edison 3580')) === JSON.stringify({ street: 'edison', number: '3580' }));
+  check('splitHouseNumber: "3580" -> null',
+    splitHouseNumber('3580') === null);
+  check('splitHouseNumber: "estadio jose" -> null',
+    splitHouseNumber('estadio jose') === null);
+  check('splitHouseNumber: "av rivadavia 14200b" -> {street:"av rivadavia", number:"14200b"}',
+    JSON.stringify(splitHouseNumber('av rivadavia 14200b')) === JSON.stringify({ street: 'av rivadavia', number: '14200b' }));
+
+  const photonEdison3580Raw = readFileSync(
+    join(APP_DIR, 'scripts', 'fixtures', 'photon-edison-3580-local.json'),
+    'utf8',
+  );
+  const edison3580Places = mapPhotonResponse(JSON.parse(photonEdison3580Raw));
+  check('mapPhotonResponse(photon-edison-3580-local.json) is []',
+    Array.isArray(edison3580Places) && edison3580Places.length === 0);
+
+  const photonEdisonStreetRaw = readFileSync(
+    join(APP_DIR, 'scripts', 'fixtures', 'photon-edison-street-local.json'),
+    'utf8',
+  );
+  const edisonStreetPlaces = mapPhotonResponse(JSON.parse(photonEdisonStreetRaw));
+  const edisonRankedStreets = rankStreets(edisonStreetPlaces, 'edison', [-58.588705, -34.6438617]);
+  const edisonFallbacks = streetFallbackPlaces(edisonRankedStreets, '3580');
+
+  check('streetFallbackPlaces edison 3580: non-empty',
+    edisonFallbacks.length > 0);
+  check('streetFallbackPlaces edison 3580: every name ends with " 3580" and contains "Edison"',
+    edisonFallbacks.every((p) => p.name.endsWith(' 3580') && p.name.includes('Edison')));
+  check('streetFallbackPlaces edison 3580: every detail starts with "Approximate"',
+    edisonFallbacks.every((p) => p.detail.startsWith('Approximate')));
+  check('streetFallbackPlaces edison 3580: ids unique and end with "#3580"',
+    new Set(edisonFallbacks.map((p) => p.id)).size === edisonFallbacks.length &&
+    edisonFallbacks.every((p) => p.id.endsWith('#3580')));
+
+  const edisonSortedStreets = sortByDistance(edisonStreetPlaces, [-58.588705, -34.6438617]);
+  const dists = edisonSortedStreets.map((p) =>
+    haversineDistanceMeters(p.center, [-58.588705, -34.6438617])
+  );
+  check('sortByDistance: distances from the bias are non-decreasing',
+    dists.every((d, i) => i === 0 || d >= dists[i - 1]));
+  check('streetFallbackPlaces edison 3580: first one detail includes "Isidro Casanova"',
+    edisonFallbacks[0].detail.includes('Isidro Casanova'));
+
+  const rankedEdisonIdx = edisonRankedStreets.findIndex((p) => p.name === 'Edison');
+  const rankedTomasIdx = edisonRankedStreets.findIndex((p) => p.name === 'Tomás Alva Edison');
+  check('rankStreets on the edison-street fixture puts a place named exactly "Edison" before "Tomás Alva Edison"',
+    rankedEdisonIdx !== -1 && rankedTomasIdx !== -1 && rankedEdisonIdx < rankedTomasIdx);
+
+  const edisonStreetPlacesCopy = JSON.stringify(edisonStreetPlaces);
+  rankStreets(edisonStreetPlaces, 'edison', [-58.588705, -34.6438617]);
+  check('rankStreets does not mutate its input',
+    JSON.stringify(edisonStreetPlaces) === edisonStreetPlacesCopy);
+
+  const inputForSort = [
+    { id: '1', name: 'Far', detail: '', center: [-58.1, -34.1] },
+    { id: '2', name: 'Near', detail: '', center: [-58.58, -34.64] },
+  ];
+  const inputForSortCopy = JSON.stringify(inputForSort);
+  sortByDistance(inputForSort, [-58.588705, -34.6438617]);
+  check('sortByDistance does not mutate its input',
+    JSON.stringify(inputForSort) === inputForSortCopy);
+
+  // fetchPhotonPlaces orchestration tests
+  const originalFetch = globalThis.fetch;
+  try {
+    let callCount = 0;
+    globalThis.fetch = async (url) => {
+      callCount++;
+      const urlStr = String(url);
+      if (urlStr.includes('&layer=street')) {
+        return {
+          ok: true,
+          json: async () => JSON.parse(photonEdisonStreetRaw),
+        };
+      }
+      if (urlStr.includes('bbox=')) {
+        return {
+          ok: true,
+          json: async () => JSON.parse(photonEdison3580Raw),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { name: 'Edison 3580 France', country: 'France' },
+              geometry: { type: 'Point', coordinates: [2.3522, 48.8566] },
+            },
+          ],
+        }),
+      };
+    };
+
+    const res1 = await fetchPhotonPlaces('edison 3580', biasHaedo);
+    check('fetchPhotonPlaces fallback: result non-empty',
+      res1.length > 0);
+    check('fetchPhotonPlaces fallback: first name is "Edison 3580"',
+      res1[0].name === 'Edison 3580');
+    check('fetchPhotonPlaces fallback: no result is in France',
+      res1.every((p) => !p.detail.includes('France') && !p.name.includes('France')));
+    check('fetchPhotonPlaces fallback: stub called exactly twice (local + street, no global)',
+      callCount === 2);
+
+    let globalCallCount = 0;
+    globalThis.fetch = async (url) => {
+      globalCallCount++;
+      const urlStr = String(url);
+      if (urlStr.includes('bbox=')) {
+        return {
+          ok: true,
+          json: async () => ({ type: 'FeatureCollection', features: [] }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { name: 'Global Result', city: 'Paris' },
+              geometry: { type: 'Point', coordinates: [2.3522, 48.8566] },
+            },
+          ],
+        }),
+      };
+    };
+
+    const res2 = await fetchPhotonPlaces('some unknown query 12345', biasHaedo);
+    check('fetchPhotonPlaces fallback: global result returned when local & street empty',
+      res2.length === 1 && res2[0].name === 'Global Result');
+    check('fetchPhotonPlaces fallback: stub called 3 times when local empty',
+      globalCallCount === 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // --- history ------------------------------------------------------------
+
+  console.log('\nhistory');
+  const dummyA = { id: 'a', name: 'Place A', detail: 'Detail A', center: [0, 0] };
+  const dummyB = { id: 'b', name: 'Place B', detail: 'Detail B', center: [1, 1] };
+  const dummyA2 = { id: 'a', name: 'Place A Updated', detail: 'Detail A Updated', center: [0, 0] };
+
+  const initialList = [dummyB, dummyA];
+  const initialCopy = JSON.parse(JSON.stringify(initialList));
+  const addedList = addToHistory(initialList, dummyA2);
+  check('addToHistory dedupes by id and moves to front',
+    addedList.length === 2 && addedList[0].id === 'a' && addedList[0].name === 'Place A Updated' && addedList[1].id === 'b');
+  check('addToHistory does not mutate input array',
+    JSON.stringify(initialList) === JSON.stringify(initialCopy));
+
+  let capList = [];
+  for (let i = 0; i < 15; i++) {
+    capList = addToHistory(capList, { id: `id-${i}`, name: `Place ${i}`, detail: `Detail ${i}`, center: [0, 0] });
+  }
+  check('addToHistory caps at HISTORY_MAX', capList.length === HISTORY_MAX && capList[0].id === 'id-14');
+
+  const sampleHistory = [
+    { id: '1', name: 'Avenida Rivadavia 14200', detail: 'Ramos Mejia', center: [-58.5, -34.6] },
+    { id: '2', name: 'Plaza San Martín', detail: 'Centro', center: [-58.4, -34.5] },
+  ];
+  check('matchHistory empty query returns all', matchHistory(sampleHistory, '').length === 2);
+  check('matchHistory whitespace query returns all', matchHistory(sampleHistory, '   ').length === 2);
+  check('matchHistory is accent-insensitive (rivadávia matches Avenida Rivadavia 14200)',
+    matchHistory(sampleHistory, 'rivadávia').length === 1 && matchHistory(sampleHistory, 'rivadávia')[0].id === '1');
+
+  check('parseHistory null returns []', parseHistory(null).length === 0);
+  check('parseHistory "not json" returns []', parseHistory('not json').length === 0);
+  const mixedJson = JSON.stringify([
+    { id: 'valid1', name: 'V1', detail: 'D1', center: [1, 2] },
+    { id: 'invalid_center', name: 'V2', detail: 'D2', center: [1, '2'] },
+    { id: 'missing_prop', name: 'V3', center: [1, 2] },
+    'random_string',
+    null,
+    { id: 'valid2', name: 'V4', detail: 'D4', center: [3, 4] },
+  ]);
+  const parsedMixed = parseHistory(mixedJson);
+  check('parseHistory mixed entries keeps only valid ones',
+    parsedMixed.length === 2 && parsedMixed[0].id === 'valid1' && parsedMixed[1].id === 'valid2');
+
+  const roundTripList = [dummyA, dummyB];
+  const roundTripResult = parseHistory(JSON.stringify(roundTripList));
+  check('parseHistory round-trip JSON.stringify -> parseHistory -> deep-equal',
+    JSON.stringify(roundTripResult) === JSON.stringify(roundTripList));
+
+  // --- suggestions --------------------------------------------------------
+
+  console.log('\nsuggestions');
+  const h1 = { id: 'h1', name: 'Estadio Amalfitani', detail: 'Liniers', center: [0, 0] };
+  const h2 = { id: 'h2', name: 'Rivadavia 14200', detail: 'Ramos Mejia', center: [1, 1] };
+  const r1 = { id: 'h1', name: 'Estadio Amalfitani', detail: 'Liniers', center: [0, 0] }; // same id
+  const r2 = { id: 'r2', name: 'estadio amalfitani', detail: 'liniers', center: [0, 0] }; // same name|detail diff id
+  const r3 = { id: 'r3', name: 'Unique Place 3', detail: 'Detail 3', center: [2, 2] };
+  const r4 = { id: 'r4', name: 'Unique Place 4', detail: 'Detail 4', center: [3, 3] };
+
+  const merged = mergeSuggestions([h1, h2], [r1, r2, r3, r4]);
+  check('mergeSuggestions never returns more than SUGGESTION_LIMIT (3)', merged.length === 3);
+  check('mergeSuggestions history first', merged[0].source === 'history' && merged[0].place.id === 'h1' &&
+    merged[1].source === 'history' && merged[1].place.id === 'h2');
+  check('mergeSuggestions result with same id as history entry is not duplicated',
+    !merged.slice(2).some((s) => s.place.id === 'h1'));
+  check('mergeSuggestions result with same normalized name|detail but diff id is not duplicated',
+    !merged.slice(2).some((s) => s.place.id === 'r2'));
+  check('mergeSuggestions third item is unique result r3',
+    merged[2].source === 'result' && merged[2].place.id === 'r3');
+
+  // highlightSegments checks
+  const ex1 = highlightSegments('Estadio José Amalfitani', 'estadio jose');
+  check('highlightSegments example 1: joins back to original text',
+    ex1.map((s) => s.text).join('') === 'Estadio José Amalfitani');
+  check('highlightSegments example 1: Estadio and José match true, Amalfitani match false',
+    ex1.some((s) => s.text.includes('Estadio') && s.match) &&
+    ex1.some((s) => s.text.includes('José') && s.match) &&
+    ex1.some((s) => s.text.includes('Amalfitani') && !s.match));
+
+  const ex2 = highlightSegments('Avenida Rivadavia', 'rivad');
+  check('highlightSegments example 2: Avenida Rivadavia with rivad',
+    ex2.length === 3 &&
+    ex2[0].text === 'Avenida ' && !ex2[0].match &&
+    ex2[1].text === 'Rivad' && ex2[1].match &&
+    ex2[2].text === 'avia' && !ex2[2].match);
+
+  const accentedOriginal = 'Estadio José María Morañós';
+  const exAccents = highlightSegments(accentedOriginal, 'jose mar');
+  check('highlightSegments re-joins to exact original text for accented string',
+    exAccents.map((s) => s.text).join('') === accentedOriginal);
+
+  const exEmpty = highlightSegments('Estadio José Amalfitani', '');
+  check('highlightSegments empty query returns one non-match segment',
+    exEmpty.length === 1 && exEmpty[0].text === 'Estadio José Amalfitani' && !exEmpty[0].match);
+
+  const exJoseLower = highlightSegments('José', 'jose');
+  const exJoseUpper = highlightSegments('José', 'JOSÉ');
+  check('highlightSegments José is matched by query jose AND by query JOSÉ',
+    exJoseLower.length === 1 && exJoseLower[0].match &&
+    exJoseUpper.length === 1 && exJoseUpper[0].match);
+
 
   console.log(`\nMerged styles written to ${outDir}`);
   console.log('Validate them with:');

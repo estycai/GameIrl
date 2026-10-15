@@ -37,7 +37,14 @@
           }
         }
       ],
-      "expo-dev-client"
+      "expo-dev-client",
+      "./plugins/with-short-cxx-path",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "GameIrl uses your location to show where you are and to find places near you."
+        }
+      ]
     ]
   }
 }

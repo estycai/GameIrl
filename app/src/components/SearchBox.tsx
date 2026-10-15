@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Keyboard,
   ScrollView,
   StyleSheet,
@@ -9,23 +10,37 @@ import {
   View,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { type Place, searchPlaces } from "../search/places";
+import { type Place } from "../search/places";
+import { useSearchSuggestions } from "../search/useSearchSuggestions";
+import { highlightSegments } from "../search/suggestions";
 import type { Theme } from "../theme/themes";
 
 interface SearchBoxProps {
   onSelectPlace: (place: Place) => void;
   theme: Theme;
+  biasPoint: [number, number];
 }
 
 export const SearchBox: React.FC<SearchBoxProps> = ({
   onSelectPlace,
   theme,
+  biasPoint,
 }) => {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
 
-  const results = searchPlaces(query);
-  const showResults = isFocused || query.length > 0;
+  const { suggestions, status, recordSelection } = useSearchSuggestions(
+    query,
+    biasPoint
+  );
+
+  const trimmedQuery = query.trim();
+  const showErrorRow = status === "error";
+  const showNoResultsRow =
+    status === "ready" && trimmedQuery.length >= 3 && suggestions.length === 0;
+  const hasDropdownContent =
+    suggestions.length > 0 || showErrorRow || showNoResultsRow;
+  const showDropdown = isFocused && hasDropdownContent;
 
   const handleClear = () => {
     setQuery("");
@@ -36,6 +51,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   // Dismiss the keyboard before leaving browse: the next phase renders a
   // banner at the bottom of the screen, which an open keyboard covers entirely.
   const handleSelect = (place: Place) => {
+    recordSelection(place);
     setQuery("");
     setIsFocused(false);
     Keyboard.dismiss();
@@ -71,6 +87,13 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           autoCorrect={false}
           returnKeyType="search"
         />
+        {status === "loading" && (
+          <ActivityIndicator
+            size="small"
+            color={theme.textSecondary}
+            style={styles.loadingIndicator}
+          />
+        )}
         {query.length > 0 && (
           <TouchableOpacity
             accessibilityRole="button"
@@ -84,7 +107,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
       </View>
 
       {/* Results Dropdown */}
-      {showResults && (
+      {showDropdown && (
         <View
           style={[
             styles.resultsContainer,
@@ -97,44 +120,121 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
         >
           <ScrollView
             keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            style={styles.resultsScroll}
+            scrollEnabled={false}
           >
-            {results.map((place) => (
-              <TouchableOpacity
-                key={place.id}
+            {suggestions.map((item, index) => {
+              const { place, source } = item;
+              const isLast =
+                index === suggestions.length - 1 &&
+                !showErrorRow &&
+                !showNoResultsRow;
+              const iconName = source === "history" ? "history" : "place";
+              const iconColor =
+                source === "history" ? theme.textSecondary : theme.accent;
+              const segments = highlightSegments(place.name, query);
+
+              return (
+                <TouchableOpacity
+                  key={place.id}
+                  style={[
+                    styles.row,
+                    !isLast && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: theme.surfaceBorder,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${
+                    source === "history" ? "Recent: " : ""
+                  }${place.name}, ${place.detail}`}
+                  onPress={() => handleSelect(place)}
+                >
+                  <MaterialIcons
+                    name={iconName}
+                    size={20}
+                    color={iconColor}
+                    style={styles.rowIcon}
+                  />
+                  <Text
+                    style={styles.rowText}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {segments.map((seg, sIdx) => (
+                      <Text
+                        key={sIdx}
+                        style={[
+                          styles.placeName,
+                          {
+                            color: theme.textPrimary,
+                            fontWeight: seg.match ? "700" : "400",
+                          },
+                        ]}
+                      >
+                        {seg.text}
+                      </Text>
+                    ))}
+                    {place.detail ? (
+                      <Text
+                        style={[
+                          styles.placeDetail,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {"  " + place.detail}
+                      </Text>
+                    ) : null}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Status: Error row */}
+            {showErrorRow && (
+              <View
                 style={[
-                  styles.resultItem,
-                  { borderBottomColor: theme.surfaceBorder },
+                  styles.row,
+                  suggestions.length > 0 && {
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: theme.surfaceBorder,
+                  },
                 ]}
-                activeOpacity={0.7}
-                onPress={() => handleSelect(place)}
               >
                 <MaterialIcons
-                  name="place"
-                  size={18}
-                  color={theme.accent}
-                  style={styles.placeIcon}
+                  name="cloud-off"
+                  size={20}
+                  color={theme.textSecondary}
+                  style={styles.rowIcon}
                 />
-                <View style={styles.resultTextContainer}>
-                  <Text
-                    style={[styles.resultName, { color: theme.textPrimary }]}
-                    numberOfLines={1}
-                  >
-                    {place.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.resultDetail,
-                      { color: theme.textSecondary },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {place.detail}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                <Text
+                  style={[styles.statusText, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  No connection
+                </Text>
+              </View>
+            )}
+
+            {/* Status: No results row */}
+            {showNoResultsRow && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name="search"
+                  size={20}
+                  color={theme.textSecondary}
+                  style={styles.rowIcon}
+                />
+                <Text
+                  style={[styles.statusText, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  No results
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
       )}
@@ -167,6 +267,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingVertical: 0,
   },
+  loadingIndicator: {
+    marginRight: 6,
+  },
   clearButton: {
     padding: 6,
   },
@@ -174,35 +277,33 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 16,
     borderWidth: 1.5,
-    maxHeight: 220,
     overflow: "hidden",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
   },
-  resultsScroll: {
-    maxHeight: 220,
-  },
-  resultItem: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  placeIcon: {
+  rowIcon: {
     marginRight: 10,
   },
-  resultTextContainer: {
+  rowText: {
     flex: 1,
   },
-  resultName: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 2,
+  placeName: {
+    fontSize: 15,
   },
-  resultDetail: {
-    fontSize: 12,
+  placeDetail: {
+    fontSize: 13,
+    fontWeight: "400",
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: "400",
   },
 });

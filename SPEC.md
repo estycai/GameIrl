@@ -345,14 +345,16 @@ Still unverified: rendering on real phone hardware, and iOS entirely.
 
 ## 8. Out of scope right now
 
-Backend, user accounts, subscriptions, real GPS and location permissions,
-background location, turn-by-turn voice, route recalculation, the routing engine
+Backend, user accounts, subscriptions, background location, turn-by-turn voice, route recalculation, the routing engine
 choice, CarPlay, and Android Auto.
 
 The React Native shell left this list on 2026-10-13, on the project owner's
 instruction, and now lives in `app/`. Phase 1 has started. Everything else above
-is still out of scope — in particular the shell draws the user puck from the
-demo route's origin point and requests no location permission.
+is still out of scope.
+
+Foreground GPS left this list on 2026-10-14, on the project owner's instruction:
+`expo-location`, a when-in-use permission, the puck at the real position and a
+working locate button. Background location is still out.
 
 Scaling scope up is the user's call, not an agent's.
 
@@ -506,14 +508,40 @@ more than anything else in this section.
 | Map tiles, styles, overlay, camera | Real |
 | Route geometry, distance, duration | Real — the OSRM demo fixture |
 | Bearing, bounds, progress along the route | Really computed from that geometry |
-| Search results | Hardcoded fixtures in `app/src/search/places.ts`. No geocoder. |
+| Search results | Real — Photon public geocoder, biased to the GPS position (route origin if GPS is unavailable). See "Search" below. |
+| Search history | Real — last 10 selections in AsyncStorage, on the device only. |
 | The route for a chosen destination | Always the same demo polyline. There is one route fixture. |
-| "Current location" | The route's origin point. No GPS, no location permission. |
+| Current location | Real — foreground GPS via `expo-location` (`app/src/location/useUserLocation.ts`). The demo route still starts at its own origin in Haedo, so two pucks show: the GPS one and the route start. |
 | Driving | Simulated at six times real speed. No GPS. |
 
 Remaining time in the nav banner is derived from the route's real average speed,
 not the simulation's, so the figure stays in real-world terms while the demo
 finishes in about two minutes instead of eleven.
+
+### Search
+
+Google-Maps-style autocomplete: at most three rows, history first (clock icon),
+then geocoder results (pin icon), with the typed word prefixes in bold.
+
+- **Geocoder: Photon** (`photon.komoot.io`), keyless. Nominatim's usage policy
+  forbids autocomplete; Google Places and Mapbox bill per request and restrict
+  storing results, which the history needs. The public Photon server is fair-use
+  only — production self-hosts the same open-source server, alongside PMTiles.
+- The verified request lives in `app/src/search/photon.ts`. It excludes
+  `highway:bus_stop` and `public_transport`: without that, bus stops on
+  Avenida Rivadavia fill every row for "rivad". `zoom=14` and
+  `location_bias_scale=0.2` bias toward the GPS position.
+- Local first: results inside a box of ±0.5° around the user. If the exact
+  house number is not in OSM (common in Argentina; Photon does not interpolate),
+  it falls back to the street, labelled "Approximate": exact name first, then by
+  distance. A worldwide query runs only when nothing local exists. Without this,
+  "Edison 3580" from Haedo returned Hungary and France.
+- Network only from three characters, after a 250 ms debounce. Every new query
+  aborts the previous request, so a slow stale response cannot overwrite a newer one.
+- `app/scripts/fixtures/photon-*.json` are real responses captured on
+  2026-10-14; `npm run verify` maps them through the real code.
+- Choosing a result still previews the single demo route — routing is out of scope.
+- AsyncStorage is a native module: adding it requires a new APK, not a Metro reload.
 
 ### The moving vehicle takes the template's own puck paint
 

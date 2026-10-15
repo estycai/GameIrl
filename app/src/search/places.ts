@@ -1,3 +1,5 @@
+import { normalizeString } from "./normalize";
+
 /**
  * Hardcoded search fixtures for testing.
  * These fixtures are synthetic test data inside the demo route's area, not verified real-world records.
@@ -48,16 +50,6 @@ export const PLACES: Place[] = [
     center: [-58.532, -34.636],
   },
 ];
-
-/**
- * Strips accents/diacritics and converts to lowercase for accent-insensitive matching.
- */
-function normalizeString(str: string): string {
-  return str
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
 
 /**
  * Searches places with a pure, case-insensitive, accent-insensitive substring match

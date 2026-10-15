@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   Platform,
   StatusBar as RNStatusBar,
@@ -38,9 +38,11 @@ import {
   type TemplateKey,
 } from "./src/style/buildStyle";
 import { getTheme } from "./src/theme/themes";
+import { useUserLocation } from "./src/location/useUserLocation";
 
 const routeData = routeDemoJson as unknown as GeoJSON.FeatureCollection;
 const routeGeometry = buildRouteGeometry(routeData);
+const fallbackRouteOrigin = getRouteOrigin(routeData);
 
 let routeDistanceMeters = 6884;
 let routeDurationSeconds = 662;
@@ -61,9 +63,31 @@ export default function App() {
   const [templateKey, setTemplateKey] = useState<TemplateKey>("miami-6");
   const [destination, setDestination] = useState<Place>(PLACES[0]);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  const { location, permission, requestPermission } = useUserLocation();
+  const biasPoint = location ?? fallbackRouteOrigin;
 
   const cameraRef = useRef<CameraRef>(null);
   const styleCache = useRef<Map<TemplateKey, StyleSpecification>>(new Map());
+  const hasAutoCenteredRef = useRef(false);
+  const pendingLocateRef = useRef(false);
+
+  // Auto-center ONCE on the first GPS fix while phase === "browse"
+  useEffect(() => {
+    if (location && !hasAutoCenteredRef.current && phase === "browse") {
+      hasAutoCenteredRef.current = true;
+      cameraRef.current?.flyTo({ center: location, zoom: 15, duration: 800 });
+    }
+  }, [location, phase]);
+
+  // When a location arrives and pendingLocateRef is true, fly to it at zoom 16 and clear the flag
+  useEffect(() => {
+    if (location && pendingLocateRef.current) {
+      pendingLocateRef.current = false;
+      cameraRef.current?.flyTo({ center: location, zoom: 16, duration: 800 });
+    }
+  }, [location]);
 
   const currentStyle = useMemo(() => {
     let cached = styleCache.current.get(templateKey);
@@ -76,7 +100,8 @@ export default function App() {
 
   const theme = useMemo(() => getTheme(templateKey), [templateKey]);
 
-  // Simulation runs only while in navigation phase
+  // NOTE: Routing is still the demo fixture, so the route starts in Haedo
+  // whatever the GPS says.
   const isNavActive = phase === "nav";
   const simulation = useRouteSimulation(routeGeometry, isNavActive, 6);
 
@@ -107,6 +132,23 @@ export default function App() {
     ],
   }), [simulation.position.center]);
 
+  const userLocationFeature = useMemo<GeoJSON.FeatureCollection | null>(() => {
+    if (!location) return null;
+    return {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Point",
+            coordinates: location,
+          },
+        },
+      ],
+    };
+  }, [location]);
+
   const handleSelectPlace = useCallback((place: Place) => {
     // NOTE: There is only one route fixture, so EVERY destination previews that
     // same demo route. We do not fake a different polyline per place.
@@ -114,10 +156,21 @@ export default function App() {
     setPhase("preview");
   }, []);
 
-  const handleLocate = useCallback(() => {
-    const origin = getRouteOrigin(routeData);
-    cameraRef.current?.flyTo({ center: origin, zoom: 15, duration: 800 });
-  }, []);
+  const handleLocate = useCallback(async () => {
+    if (location) {
+      cameraRef.current?.flyTo({ center: location, zoom: 16, duration: 800 });
+      return;
+    }
+
+    pendingLocateRef.current = true;
+    const granted = await requestPermission();
+    if (!granted) {
+      pendingLocateRef.current = false;
+      setLocationError(
+        "Location is off. Allow location access for GameIrl in Settings."
+      );
+    }
+  }, [location, requestPermission]);
 
   const handleMapFail = useCallback((event: any) => {
     const detail = event?.nativeEvent?.message ?? String(event?.nativeEvent ?? "Map failed to load");
@@ -136,6 +189,21 @@ export default function App() {
         onDidFailLoadingMap={handleMapFail}
       >
         <Camera ref={cameraRef} {...cameraStop} />
+
+        {location !== null && phase !== "nav" && userLocationFeature && (
+          <GeoJSONSource id="user-location" data={userLocationFeature}>
+            <Layer
+              id="user-location-halo"
+              type="circle"
+              paint={vehicleHaloPaint(templateKey) as any}
+            />
+            <Layer
+              id="user-location-core"
+              type="circle"
+              paint={vehicleCorePaint(templateKey) as any}
+            />
+          </GeoJSONSource>
+        )}
 
         {phase === "nav" && (
           <GeoJSONSource id="nav-vehicle" data={vehicleFeature}>
@@ -168,7 +236,11 @@ export default function App() {
         />
         {phase === "browse" && (
           <View style={styles.searchWrapper}>
-            <SearchBox onSelectPlace={handleSelectPlace} theme={theme} />
+            <SearchBox
+              onSelectPlace={handleSelectPlace}
+              theme={theme}
+              biasPoint={biasPoint}
+            />
           </View>
         )}
       </View>
@@ -217,6 +289,13 @@ export default function App() {
 
       {mapError && (
         <ErrorBanner message={mapError} onDismiss={() => setMapError(null)} />
+      )}
+
+      {locationError && (
+        <ErrorBanner
+          message={locationError}
+          onDismiss={() => setLocationError(null)}
+        />
       )}
     </View>
   );
