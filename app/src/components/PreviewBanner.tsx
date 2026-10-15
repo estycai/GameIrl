@@ -1,27 +1,35 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { Theme } from "../theme/themes";
 
-interface PreviewBannerProps {
-  destinationName: string;
-  distanceMeters: number;
-  durationSeconds: number;
+export interface PreviewBannerProps {
+  distanceMeters: number | null;
+  durationSeconds: number | null;
+  loading: boolean;
+  errorMessage: string | null;
+  disabled?: boolean;
+  onRetry: () => void;
   onStartNav: () => void;
-  onBack: () => void;
   theme: Theme;
 }
 
 export const PreviewBanner: React.FC<PreviewBannerProps> = ({
-  destinationName,
   distanceMeters,
   durationSeconds,
+  loading,
+  errorMessage,
+  disabled,
+  onRetry,
   onStartNav,
-  onBack,
   theme,
 }) => {
-  const distanceKm = (distanceMeters / 1000).toFixed(1);
-  const durationMin = Math.round(durationSeconds / 60);
+  const distanceKm =
+    distanceMeters !== null ? (distanceMeters / 1000).toFixed(1) : "--";
+  const durationMin =
+    durationSeconds !== null ? Math.round(durationSeconds / 60) : "--";
+
+  const isStartDisabled =
+    disabled || loading || distanceMeters === null || durationSeconds === null;
 
   return (
     <View
@@ -34,44 +42,69 @@ export const PreviewBanner: React.FC<PreviewBannerProps> = ({
         },
       ]}
     >
-      {/* Header: Back button + Destination Name */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Back to browse"
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <MaterialIcons name="arrow-back" size={22} color={theme.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={[styles.destinationTitle, { color: theme.textPrimary }]}
-          numberOfLines={1}
-        >
-          {destinationName}
-        </Text>
-      </View>
-
-      {/* Action Row: Metrics + INICIAR Button */}
-      <View style={styles.actionRow}>
-        <View style={styles.metricsContainer}>
-          <Text style={[styles.metricsText, { color: theme.textPrimary }]}>
-            {distanceKm} km{"  "}·{"  "}{durationMin} min
+      {loading ? (
+        <View style={styles.stateRow}>
+          <ActivityIndicator size="small" color={theme.accent} />
+          <Text style={[styles.statusText, { color: theme.textSecondary }]}>
+            Calculating route...
           </Text>
         </View>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Start navigation"
-          activeOpacity={0.8}
-          onPress={onStartNav}
-          style={[styles.startButton, { backgroundColor: theme.accent }]}
-        >
-          <Text style={[styles.startText, { color: theme.accentContrast }]}>
-            INICIAR
+      ) : errorMessage ? (
+        <View style={styles.errorRow}>
+          <Text
+            style={[styles.errorText, { color: theme.textSecondary }]}
+            numberOfLines={2}
+          >
+            {errorMessage}
           </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Retry route calculation"
+            activeOpacity={0.8}
+            onPress={onRetry}
+            style={[styles.retryButton, { borderColor: theme.accent }]}
+          >
+            <Text style={[styles.retryText, { color: theme.accent }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.actionRow}>
+          <View style={styles.metricsContainer}>
+            <Text style={[styles.metricsText, { color: theme.textPrimary }]}>
+              {distanceKm} km{"  "}·{"  "}{durationMin} min
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Start navigation"
+            accessibilityState={{ disabled: isStartDisabled }}
+            activeOpacity={isStartDisabled ? 1 : 0.8}
+            disabled={isStartDisabled}
+            onPress={onStartNav}
+            style={[
+              styles.startButton,
+              {
+                backgroundColor: isStartDisabled ? theme.surfaceBorder : theme.accent,
+                opacity: isStartDisabled ? 0.6 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.startText,
+                {
+                  color: isStartDisabled
+                    ? theme.textSecondary
+                    : theme.accentContrast,
+                },
+              ]}
+            >
+              Start
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -86,20 +119,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+    minHeight: 72,
+    justifyContent: "center",
   },
-  headerRow: {
+  stateRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 6,
   },
-  backButton: {
-    padding: 4,
-    marginRight: 8,
+  statusText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
-  destinationTitle: {
-    fontSize: 16,
-    fontWeight: "700",
+  errorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    fontWeight: "500",
     flex: 1,
+  },
+  retryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: "700",
   },
   actionRow: {
     flexDirection: "row",
@@ -110,21 +163,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metricsText: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
     letterSpacing: 0.3,
   },
   startButton: {
     paddingVertical: 10,
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
   },
   startText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
 });

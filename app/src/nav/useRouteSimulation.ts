@@ -1,9 +1,8 @@
 /**
  * Route progress simulation hook.
  *
- * NOTE: There is no GPS hardware tracking or location permissions in this app.
- * The simulation is an honest stand-in for real driving navigation on device,
- * advancing along the demo route's geometry over time.
+ * Advances along the active route's geometry over time using its real average speed
+ * derived from distance and duration.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,9 +10,6 @@ import {
   positionAtDistance,
   type RouteGeometry,
 } from "./routeProgress";
-
-// Default route speed: 6884 metres / 662 seconds ≈ 10.3988 m/s (~37.4 km/h)
-const DEFAULT_ROUTE_SPEED_MPS = 6884 / 662;
 
 export interface RouteSimulationState {
   travelledMeters: number;
@@ -27,14 +23,23 @@ export interface RouteSimulationState {
 /**
  * Advances along the route geometry with elapsed real time when `active` is true.
  * Clears timers on unmount or when `active` becomes false, resetting travelled distance.
+ * Speed is derived from the active route's distanceMeters and durationSeconds.
  */
 export function useRouteSimulation(
   geometry: RouteGeometry,
   active: boolean,
+  distanceMeters: number,
+  durationSeconds: number,
   speedMultiplier: number = 6
 ): RouteSimulationState {
   const [travelledMeters, setTravelledMeters] = useState(0);
   const lastTimeRef = useRef<number | null>(null);
+
+  // Derive route speed in m/s: fallback to ~30 km/h (8.33 m/s) if duration is 0
+  const routeSpeedMps =
+    durationSeconds > 0 && distanceMeters > 0
+      ? distanceMeters / durationSeconds
+      : 8.33;
 
   useEffect(() => {
     if (!active) {
@@ -44,7 +49,7 @@ export function useRouteSimulation(
     }
 
     lastTimeRef.current = Date.now();
-    const effectiveSpeed = DEFAULT_ROUTE_SPEED_MPS * speedMultiplier;
+    const effectiveSpeed = routeSpeedMps * speedMultiplier;
 
     // Tick at 50ms interval (~20 updates/second) computing exact dt from timestamps
     const timer = setInterval(() => {
@@ -65,7 +70,7 @@ export function useRouteSimulation(
     return () => {
       clearInterval(timer);
     };
-  }, [active, geometry.totalMeters, speedMultiplier]);
+  }, [active, geometry.totalMeters, routeSpeedMps, speedMultiplier]);
 
   const position = useMemo(
     () => positionAtDistance(geometry, travelledMeters),
@@ -73,7 +78,7 @@ export function useRouteSimulation(
   );
 
   const remainingMeters = Math.max(0, geometry.totalMeters - travelledMeters);
-  const remainingSeconds = Math.round(remainingMeters / DEFAULT_ROUTE_SPEED_MPS);
+  const remainingSeconds = Math.round(remainingMeters / routeSpeedMps);
   const isFinished =
     geometry.totalMeters > 0 && travelledMeters >= geometry.totalMeters;
 

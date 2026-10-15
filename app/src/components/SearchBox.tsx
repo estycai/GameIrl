@@ -18,7 +18,7 @@ import type { Theme } from "../theme/themes";
 interface SearchBoxProps {
   onSelectPlace: (place: Place) => void;
   theme: Theme;
-  biasPoint: [number, number];
+  biasPoint: [number, number] | null;
 }
 
 export const SearchBox: React.FC<SearchBoxProps> = ({

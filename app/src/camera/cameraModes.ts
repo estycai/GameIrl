@@ -146,28 +146,41 @@ export function getCameraStop(
   mode: CameraMode,
   route: GeoJSON.FeatureCollection
 ): CameraStop {
-  const origin = getRouteOrigin(route) as LngLat;
-
   switch (mode) {
     case "browse":
       return {
-        center: origin,
-        zoom: 13,
+        center: [0, 0],
+        zoom: 1,
         pitch: 0,
         bearing: 0,
         duration: 800,
         easing: "ease",
       };
-    case "preview":
+    case "preview": {
+      let bounds: LngLatBounds;
+      try {
+        bounds = routeBounds(route) as LngLatBounds;
+      } catch {
+        return {
+          center: [0, 0],
+          zoom: 1,
+          pitch: 0,
+          bearing: 0,
+          duration: 800,
+          easing: "ease",
+        };
+      }
       return {
-        bounds: routeBounds(route) as LngLatBounds,
+        bounds,
         padding: PREVIEW_PADDING,
         pitch: 0,
         bearing: 0,
         duration: 800,
         easing: "ease",
       };
-    case "nav":
+    }
+    case "nav": {
+      const origin = getRouteOrigin(route) as LngLat;
       return {
         center: origin,
         zoom: 17,
@@ -176,5 +189,6 @@ export function getCameraStop(
         duration: 800,
         easing: "ease",
       };
+    }
   }
 }

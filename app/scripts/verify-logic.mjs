@@ -64,6 +64,8 @@ try {
       'src/style/buildStyle.ts',
       'src/camera/cameraModes.ts',
       'src/nav/routeProgress.ts',
+      'src/routing/osrm.ts',
+      'src/routing/routeLogic.ts',
       'src/search/places.ts',
       'src/search/normalize.ts',
       'src/search/photon.ts',
@@ -86,12 +88,15 @@ try {
   const { routeBounds } = require_(join(outDir, 'src', 'style', 'routeBounds.js'));
   const { buildRouteGeometry, positionAtDistance } =
     require_(join(outDir, 'src', 'nav', 'routeProgress.js'));
-  const { PLACES, searchPlaces } =
-    require_(join(outDir, 'src', 'search', 'places.js'));
+  const {
+    parseOsrmResponse, buildRouteFeatureCollection, buildOsrmUrl,
+  } = require_(join(outDir, 'src', 'routing', 'osrm.js'));
+  const {
+    resolveRouteState, isRequestCurrent,
+  } = require_(join(outDir, 'src', 'routing', 'routeLogic.js'));
   const { normalizeString } =
     require_(join(outDir, 'src', 'search', 'normalize.js'));
   const {
-    PHOTON_BIAS,
     buildPhotonUrl,
     mapPhotonResponse,
     localBbox,
@@ -216,6 +221,15 @@ try {
   // --- camera modes -------------------------------------------------------
 
   console.log('\ngetCameraStop');
+  const emptyFeatureCollection = { type: 'FeatureCollection', features: [] };
+  const stopEmptyNoLoc = getCameraStop('browse', emptyFeatureCollection);
+  check('getCameraStop("browse", emptyFeatureCollection) returns world view at [0, 0] zoom 1',
+    stopEmptyNoLoc.center[0] === 0 && stopEmptyNoLoc.center[1] === 0 && stopEmptyNoLoc.zoom === 1);
+
+  const stopPreviewEmpty = getCameraStop('preview', emptyFeatureCollection);
+  check('getCameraStop("preview", emptyFeatureCollection) does not throw with no route',
+    stopPreviewEmpty.center[0] === 0 && stopPreviewEmpty.center[1] === 0 && stopPreviewEmpty.zoom === 1);
+
   for (const mode of CAMERA_MODES) {
     const stop = getCameraStop(mode, route);
     // 60 is MapLibre Native's ceiling, not a value to tune upward.
@@ -227,7 +241,8 @@ try {
   const browse = getCameraStop('browse', route);
   const preview = getCameraStop('preview', route);
   const nav = getCameraStop('nav', route);
-  check('browse is flat at zoom 13', browse.pitch === 0 && browse.zoom === 13);
+  check('browse is neutral world view at zoom 1',
+    browse.pitch === 0 && browse.zoom === 1 && browse.center[0] === 0 && browse.center[1] === 0);
   check('preview fits bounds with padding',
     preview.bounds !== undefined && preview.padding !== undefined);
   check('nav is pitch 60, zoom 17, bearing down the route',
@@ -295,33 +310,125 @@ try {
 
   // --- search -------------------------------------------------------------
 
-  console.log('\nsearchPlaces');
-  check('an empty query returns every fixture',
-    searchPlaces('').length === PLACES.length);
-  check('whitespace is treated as empty',
-    searchPlaces('   ').length === PLACES.length);
-  check('matching is case-insensitive',
-    searchPlaces('HOSPITAL').length === searchPlaces('hospital').length &&
-    searchPlaces('HOSPITAL').length > 0);
-  check('matching is accent-insensitive',
-    searchPlaces('Rivadávia').some((p) => p.id === 'route-destination'));
-  check('the detail line is searched too',
-    searchPlaces('terminal').some((p) => p.id === 'station'));
-  check('a query that matches nothing returns nothing',
-    searchPlaces('zzzzzzzz').length === 0);
-  check('fixture ids are unique',
-    new Set(PLACES.map((p) => p.id)).size === PLACES.length);
-  check('every fixture sits inside the route bbox',
-    PLACES.every(({ center: [lng, lat] }) =>
-      lng >= w && lng <= e && lat >= s && lat <= n));
-  check('the first fixture is the demo route\'s real destination',
-    PLACES[0].center[0] === dest.geometry.coordinates[0] &&
-    PLACES[0].center[1] === dest.geometry.coordinates[1]);
+  // --- routing (OSRM) ----------------------------------------------------
+
+  console.log('\nosrm routing');
+  const mockOsrmResponse = {
+    code: 'Ok',
+    routes: [
+      {
+        distance: 6884.2,
+        duration: 662.4,
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [-58.588707, -34.643853],
+            [-58.588318, -34.643806],
+            [-58.519582, -34.634945],
+          ],
+        },
+      },
+    ],
+  };
+
+  const parsed = parseOsrmResponse(mockOsrmResponse);
+  check('parseOsrmResponse parses distance and duration',
+    parsed.distanceMeters === 6884 && parsed.durationSeconds === 662);
+  check('parseOsrmResponse produces FeatureCollection with 3 features',
+    parsed.featureCollection.type === 'FeatureCollection' &&
+    parsed.featureCollection.features.length === 3);
+
+  const routeFeat = parsed.featureCollection.features.find((f) => f.properties.kind === 'route');
+  const originFeat = parsed.featureCollection.features.find((f) => f.properties.kind === 'origin');
+  const destFeat = parsed.featureCollection.features.find((f) => f.properties.kind === 'destination');
+
+  check('route feature matches LineString geometry and properties',
+    routeFeat && routeFeat.geometry.type === 'LineString' &&
+    routeFeat.properties.distance_m === 6884 && routeFeat.properties.duration_s === 662);
+  check('origin feature is Point A at line start',
+    originFeat && originFeat.properties.label === 'A' &&
+    originFeat.geometry.coordinates[0] === -58.588707 &&
+    originFeat.geometry.coordinates[1] === -34.643853);
+  check('destination feature is Point B at line end',
+    destFeat && destFeat.properties.label === 'B' &&
+    destFeat.geometry.coordinates[0] === -58.519582 &&
+    destFeat.geometry.coordinates[1] === -34.634945);
+
+  // Error handling checks
+  let nonOkThrown = false;
+  try {
+    parseOsrmResponse({ code: 'NoRoute', routes: [] });
+  } catch (e) {
+    nonOkThrown = true;
+  }
+  check('parseOsrmResponse throws on non-Ok code', nonOkThrown);
+
+  let emptyRoutesThrown = false;
+  try {
+    parseOsrmResponse({ code: 'Ok', routes: [] });
+  } catch (e) {
+    emptyRoutesThrown = true;
+  }
+  check('parseOsrmResponse throws on empty routes', emptyRoutesThrown);
+
+  // URL builder and swap logic checks
+  const pA = [-58.588705, -34.6438617];
+  const pB = [-58.519582, -34.634945];
+  const forwardUrl = buildOsrmUrl(pA, pB);
+  check('buildOsrmUrl forward coordinates order lon,lat',
+    forwardUrl.includes('/-58.588705,-34.6438617;-58.519582,-34.634945'));
+
+  const swappedUrl = buildOsrmUrl(pB, pA);
+  check('buildOsrmUrl swapped coordinates order lon,lat',
+    swappedUrl.includes('/-58.519582,-34.634945;-58.588705,-34.6438617'));
+
+  // Pure route state resolution & swap tests
+  const mockPlace = {
+    id: 'test-place',
+    name: 'Test Place',
+    detail: 'Buenos Aires',
+    center: pB,
+  };
+  const forwardState = resolveRouteState(mockPlace, false, pA);
+  check('resolveRouteState forward orders origin as userLoc and destination as place.center',
+    forwardState.status === 'ready' &&
+    forwardState.endpoints.origin[0] === pA[0] &&
+    forwardState.endpoints.origin[1] === pA[1] &&
+    forwardState.endpoints.destination[0] === pB[0] &&
+    forwardState.endpoints.destination[1] === pB[1]);
+
+  const swappedState = resolveRouteState(mockPlace, true, pA);
+  check('swap reverses origin and destination',
+    swappedState.status === 'ready' &&
+    swappedState.endpoints.origin[0] === pB[0] &&
+    swappedState.endpoints.origin[1] === pB[1] &&
+    swappedState.endpoints.destination[0] === pA[0] &&
+    swappedState.endpoints.destination[1] === pA[1]);
+
+  const noGpsState = resolveRouteState(mockPlace, false, null);
+  check('the no-GPS path yields the "Waiting for your location" state',
+    noGpsState.status === 'waiting_location' &&
+    noGpsState.message === 'Waiting for your location');
+
+  const idleState = resolveRouteState(null, false, pA);
+  check('resolveRouteState with no destination yields idle state',
+    idleState.status === 'idle');
+
+  // Request ID tracking purity check
+  check('a superseded request id is ignored',
+    isRequestCurrent(1, 2) === false && isRequestCurrent(2, 2) === true);
+
+  // Distance and duration formatting logic
+  const formatDistanceKm = (m) => (m / 1000).toFixed(1);
+  const formatDurationMin = (s) => Math.round(s / 60);
+  check('distance formatting converts 6884 m to 6.9 km', formatDistanceKm(6884) === '6.9');
+  check('duration formatting converts 662 s to 11 min', formatDurationMin(662) === 11);
 
   // --- photon -------------------------------------------------------------
 
   console.log('\nphoton');
-  const url = buildPhotonUrl('estadio jose');
+  const biasHaedo = { lat: -34.6438617, lon: -58.588705 };
+  const url = buildPhotonUrl('estadio jose', biasHaedo);
   check('buildPhotonUrl contains q=estadio%20jose', url.includes('q=estadio%20jose'));
   check('buildPhotonUrl contains both osm_tag exclusions',
     url.includes('osm_tag=!highway:bus_stop') && url.includes('osm_tag=!public_transport'));
@@ -381,11 +488,10 @@ try {
   check('mapPhotonResponse({features: "x"}) returns []', Array.isArray(mapPhotonResponse({ features: 'x' })) && mapPhotonResponse({ features: 'x' }).length === 0);
 
   // Task 3 additions
-  const expectedOldUrl = 'https://photon.komoot.io/api/?q=estadio%20jose&limit=8&lat=-34.6438617&lon=-58.588705&zoom=14&location_bias_scale=0.2&osm_tag=!highway:bus_stop&osm_tag=!public_transport';
-  check('buildPhotonUrl("estadio jose") with no options equals exactly the old URL',
-    buildPhotonUrl('estadio jose') === expectedOldUrl);
+  check('buildPhotonUrl with null bias excludes lat/lon/zoom/location_bias_scale',
+    !buildPhotonUrl('estadio jose', null).includes('&lat=') &&
+    buildPhotonUrl('estadio jose', null).includes('q=estadio%20jose'));
 
-  const biasHaedo = { lat: -34.6438617, lon: -58.588705 };
   const bboxUrl = buildPhotonUrl('x', biasHaedo, { bbox: localBbox(biasHaedo), layer: 'street' });
   check('buildPhotonUrl with bbox and layer contains formatted bbox and layer=street',
     bboxUrl.includes('bbox=-59.088705,-35.143862,-58.088705,-34.143862') &&

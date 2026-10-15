@@ -494,10 +494,12 @@ doing and `cameraModeForPhase` maps it to a camera mode; the two types stay
 distinct because they coincide today and may not later.
 
   browse   search field + locate button
-           selecting a search result -> preview
-  preview  bottom banner: destination, distance, duration, INICIAR
-           INICIAR -> nav, back -> browse
-  nav      simulated drive, following camera, countdown banner
+           selecting a search result -> drops red pin, enters preview
+  preview  top card: "Your location" -> destination with swap button and close button
+           bottom banner: distance (km), duration (min), Start button
+           loading and error/retry states; camera fits dynamic route bounds
+           Start -> nav, close/back -> browse (clears route and pin)
+  nav      simulated drive along computed route, following camera, countdown banner
            exit -> browse
 
 **What is real and what is fixture.** Tomorrow's reader needs this separation
@@ -506,19 +508,19 @@ more than anything else in this section.
 | Piece | Status |
 | --- | --- |
 | Map tiles, styles, overlay, camera | Real |
-| Route geometry, distance, duration | Real — the OSRM demo fixture |
-| Bearing, bounds, progress along the route | Really computed from that geometry |
-| Search results | Real — Photon public geocoder, biased to the GPS position (route origin if GPS is unavailable). See "Search" below. |
+| Route geometry, distance, duration | Real — calculated dynamically via OSRM public demo server (`router.project-osrm.org`) |
+| Bearing, bounds, progress along the route | Really computed from that dynamic geometry |
+| Search results | Real — Photon public geocoder, biased to current GPS fix when available (no bias params when unavailable). See "Search" below. |
 | Search history | Real — last 10 selections in AsyncStorage, on the device only. |
-| The route for a chosen destination | Always the same demo polyline. There is one route fixture. |
-| Current location | Real — foreground GPS via `expo-location` (`app/src/location/useUserLocation.ts`). The demo route still starts at its own origin in Haedo, so two pucks show: the GPS one and the route start. |
-| Driving | Simulated at six times real speed. No GPS. |
+| The route for a chosen destination | Real road-following driving route between GPS location and destination pin, recomputed upon swap. No hardcoded place or route fixtures at startup. |
+| Current location | Real — foreground GPS via `expo-location` (`app/src/location/useUserLocation.ts`). Neutral world view `[0,0]` at zoom 1 before first fix, then one-time fly-to on fix. |
+| Driving | Simulated along the active route at six times real speed derived from its distance and duration. |
 
 Remaining time in the nav banner is derived from the route's real average speed,
 not the simulation's, so the figure stays in real-world terms while the demo
 finishes in about two minutes instead of eleven.
 
-### Search
+### Search and Routing
 
 Google-Maps-style autocomplete: at most three rows, history first (clock icon),
 then geocoder results (pin icon), with the typed word prefixes in bold.
@@ -530,7 +532,7 @@ then geocoder results (pin icon), with the typed word prefixes in bold.
 - The verified request lives in `app/src/search/photon.ts`. It excludes
   `highway:bus_stop` and `public_transport`: without that, bus stops on
   Avenida Rivadavia fill every row for "rivad". `zoom=14` and
-  `location_bias_scale=0.2` bias toward the GPS position.
+  `location_bias_scale=0.2` bias toward the GPS position when available.
 - Local first: results inside a box of ±0.5° around the user. If the exact
   house number is not in OSM (common in Argentina; Photon does not interpolate),
   it falls back to the street, labelled "Approximate": exact name first, then by
@@ -538,9 +540,13 @@ then geocoder results (pin icon), with the typed word prefixes in bold.
   "Edison 3580" from Haedo returned Hungary and France.
 - Network only from three characters, after a 250 ms debounce. Every new query
   aborts the previous request, so a slow stale response cannot overwrite a newer one.
+- **Routing: OSRM** (`router.project-osrm.org`), keyless driving route API
+  (`app/src/routing/osrm.ts`). GET driving route between user GPS and destination
+  (or reversed when swapped). AbortController with 10s timeout aborts prior in-flight
+  requests. Yields real distance, duration, and GeoJSON LineString transformed into
+  the overlay FeatureCollection shape.
 - `app/scripts/fixtures/photon-*.json` are real responses captured on
   2026-10-14; `npm run verify` maps them through the real code.
-- Choosing a result still previews the single demo route — routing is out of scope.
 - AsyncStorage is a native module: adding it requires a new APK, not a Metro reload.
 
 ### The moving vehicle takes the template's own puck paint

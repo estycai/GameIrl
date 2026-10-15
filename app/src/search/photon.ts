@@ -4,11 +4,6 @@ import { haversineDistanceMeters } from "../camera/cameraModes";
 
 export type LngLat = [number, number];
 
-/**
- * Fallback bias used when GPS is unavailable (origin in Ramos Mejía).
- */
-export const PHOTON_BIAS = { lat: -34.6438617, lon: -58.588705 };
-
 export interface BuildPhotonUrlOptions {
   limit?: number;
   bbox?: [number, number, number, number];
@@ -17,17 +12,23 @@ export interface BuildPhotonUrlOptions {
 
 /**
  * Builds the verified Photon API request URL.
- * With no options, the output stays byte-identical to previous releases.
+ * Bias is optional: when provided, adds lat, lon, zoom=14, location_bias_scale=0.2.
  */
 export function buildPhotonUrl(
   query: string,
-  bias: { lat: number; lon: number } = PHOTON_BIAS,
+  bias?: { lat: number; lon: number } | null,
   options: BuildPhotonUrlOptions = {}
 ): string {
   const trimmed = query.trim();
   const encodedQuery = encodeURIComponent(trimmed);
   const limit = options.limit ?? 8;
-  let url = `https://photon.komoot.io/api/?q=${encodedQuery}&limit=${limit}&lat=${bias.lat}&lon=${bias.lon}&zoom=14&location_bias_scale=0.2&osm_tag=!highway:bus_stop&osm_tag=!public_transport`;
+  let url = `https://photon.komoot.io/api/?q=${encodedQuery}&limit=${limit}`;
+
+  if (bias) {
+    url += `&lat=${bias.lat}&lon=${bias.lon}&zoom=14&location_bias_scale=0.2`;
+  }
+
+  url += `&osm_tag=!highway:bus_stop&osm_tag=!public_transport`;
 
   if (options.bbox) {
     const formattedBbox = options.bbox.map((coord) => coord.toFixed(6)).join(",");
@@ -327,13 +328,20 @@ async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
 
 /**
  * Fetches places matching a query using the Photon public API with local bbox
- * and street fallback for missing house numbers.
+ * and street fallback for missing house numbers when bias is available.
  */
 export async function fetchPhotonPlaces(
   query: string,
-  bias: { lat: number; lon: number },
+  bias?: { lat: number; lon: number } | null,
   signal?: AbortSignal
 ): Promise<Place[]> {
+  // If no bias is provided, perform a global query directly
+  if (!bias) {
+    const globalUrl = buildPhotonUrl(query, null);
+    const globalJson = await fetchJson(globalUrl, signal);
+    return mapPhotonResponse(globalJson);
+  }
+
   // 1. local = places from buildPhotonUrl(query, bias, { bbox: localBbox(bias) })
   const localUrl = buildPhotonUrl(query, bias, { bbox: localBbox(bias) });
   const localJson = await fetchJson(localUrl, signal);

@@ -9,7 +9,7 @@ export type SearchStatus = "idle" | "loading" | "ready" | "error";
 
 export function useSearchSuggestions(
   query: string,
-  bias: LngLat
+  bias: LngLat | null
 ): {
   suggestions: Suggestion[];
   status: SearchStatus;
@@ -19,7 +19,7 @@ export function useSearchSuggestions(
   const [lastResults, setLastResults] = useState<Place[]>([]);
   const [status, setStatus] = useState<SearchStatus>("idle");
 
-  const isMountedRef = useRef(true);
+  const isMounted = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -29,16 +29,16 @@ export function useSearchSuggestions(
 
   // Load history on mount
   useEffect(() => {
-    isMountedRef.current = true;
+    isMounted.current = true;
 
     loadHistory().then((loaded) => {
-      if (isMountedRef.current) {
+      if (isMounted.current) {
         setHistory(loaded);
       }
     });
 
     return () => {
-      isMountedRef.current = false;
+      isMounted.current = false;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
@@ -77,17 +77,17 @@ export function useSearchSuggestions(
       setStatus("loading");
 
       const currentBias = biasRef.current;
-      const biasObj = { lat: currentBias[1], lon: currentBias[0] };
+      const biasObj = currentBias ? { lat: currentBias[1], lon: currentBias[0] } : null;
 
       fetchPhotonPlaces(targetQuery, biasObj, controller.signal)
         .then((places) => {
-          if (!isMountedRef.current) return;
+          if (!isMounted.current) return;
           if (controller.signal.aborted) return;
           setLastResults(places);
           setStatus("ready");
         })
         .catch((error: unknown) => {
-          if (!isMountedRef.current) return;
+          if (!isMounted.current) return;
           if (
             controller.signal.aborted ||
             (error instanceof Error && error.name === "AbortError")
